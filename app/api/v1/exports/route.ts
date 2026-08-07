@@ -1,0 +1,8 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { authenticateApiRequest } from "@/lib/api-auth";
+import { createExportJob } from "@/lib/data-jobs";
+import { sql } from "@/lib/db";
+const schema=z.object({list_id:z.string().uuid(),status:z.enum(["pending","active","unsubscribed","archived"]).optional(),columns:z.array(z.string().max(100)).max(200).optional()});
+export async function GET(request:Request){const principal=await authenticateApiRequest(request,"contacts:read");if(!principal)return NextResponse.json({error:{code:"unauthorized",message:"No autorizado"}},{status:401});const rows=await sql`SELECT id,status,progress,total_rows,processed_rows,result,error,result_storage_key IS NOT NULL AS downloadable,created_at,completed_at FROM background_jobs WHERE type='contacts_export' ORDER BY created_at DESC LIMIT 100`;return NextResponse.json({data:rows});}
+export async function POST(request:Request){const principal=await authenticateApiRequest(request,"contacts:read");if(!principal)return NextResponse.json({error:{code:"unauthorized",message:"No autorizado"}},{status:401});try{const input=schema.parse(await request.json());const result=await createExportJob(input,request.headers.get("idempotency-key")??"",principal.id);return NextResponse.json({...result,status_url:`/api/v1/exports/${result.id}`},{status:202});}catch(error){if(error instanceof z.ZodError)return NextResponse.json({error:{code:"validation_error",message:"Petición no válida",issues:error.issues}},{status:422});const message=error instanceof Error?error.message:"No se pudo crear la exportación";return NextResponse.json({error:{code:"export_failed",message}},{status:message.includes("Idempotency-Key ya")?409:422});}}

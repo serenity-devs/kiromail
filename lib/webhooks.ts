@@ -1,0 +1,17 @@
+import { createHmac } from "node:crypto";
+import { lookup } from "node:dns/promises";
+import { isIP } from "node:net";
+import { env } from "./config";
+import { sql } from "./db";
+import { decryptSecret } from "./secrets";
+
+function privateAddress(address:string){if(address==="::1"||address.startsWith("fc")||address.startsWith("fd")||address.startsWith("fe80:"))return true;if(isIP(address)===4){const parts=address.split(".").map(Number);return parts[0]===10||parts[0]===127||(parts[0]===169&&parts[1]===254)||(parts[0]===172&&parts[1]>=16&&parts[1]<=31)||(parts[0]===192&&parts[1]===168)||parts[0]===0;}return false;}
+export async function validateWebhookUrl(value:string){const url=new URL(value);if(url.protocol!=="https:"&&!(env.allowPrivateWebhooks&&url.protocol==="http:"))throw new Error("El webhook debe usar HTTPS");if(url.username||url.password)throw new Error("La URL no puede incluir credenciales");const addresses=await lookup(url.hostname,{all:true});if(!env.allowPrivateWebhooks&&addresses.some(item=>privateAddress(item.address)))throw new Error("La URL resuelve a una red privada o local");return url;}
+
+type Delivery={id:string;endpoint_id:string;url:string;secret_encrypted:string;event_type:string;payload:Record<string,unknown>;attempt_count:number};
+export async function deliverPendingWebhooks(){const deliveries=await sql<Delivery[]>`
+  UPDATE webhook_deliveries d SET attempt_count=d.attempt_count+1,next_attempt_at=now()+interval '15 minutes'
+  FROM webhook_endpoints w WHERE d.endpoint_id=w.id AND d.id IN(
+    SELECT id FROM webhook_deliveries WHERE status='pending' AND COALESCE(next_attempt_at,now())<=now() ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 20
+  ) AND w.status='active' RETURNING d.id,d.endpoint_id,w.url,w.secret_encrypted,d.event_type,d.payload,d.attempt_count
+`;for(const delivery of deliveries){let responseStatus:number|null=null;let responseBody="";try{const url=await validateWebhookUrl(delivery.url);const body=JSON.stringify(delivery.payload);const timestamp=Math.floor(Date.now()/1000).toString();const signature=createHmac("sha256",decryptSecret(delivery.secret_encrypted)).update(`${timestamp}.${body}`).digest("hex");const response=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json","User-Agent":"Serenity-Mail-Webhooks/1.0","X-Serenity-Event":delivery.event_type,"X-Serenity-Delivery":delivery.id,"X-Serenity-Timestamp":timestamp,"X-Serenity-Signature":`sha256=${signature}`},body,signal:AbortSignal.timeout(10_000),redirect:"error"});responseStatus=response.status;responseBody=(await response.text()).slice(0,2000);if(!response.ok)throw new Error(`HTTP ${response.status}`);await sql`UPDATE webhook_deliveries SET status='delivered',response_status=${response.status},response_body=${responseBody},delivered_at=now(),next_attempt_at=NULL WHERE id=${delivery.id}`;await sql`UPDATE webhook_endpoints SET failure_count=0,last_success_at=now(),updated_at=now() WHERE id=${delivery.endpoint_id}`;}catch(error){const terminal=delivery.attempt_count>=10;await sql`UPDATE webhook_deliveries SET status=${terminal?"failed":"pending"},response_status=${responseStatus},response_body=${responseBody||String(error).slice(0,2000)},next_attempt_at=${terminal?null:new Date(Date.now()+Math.min(3_600_000,2**delivery.attempt_count*5000))} WHERE id=${delivery.id}`;await sql`UPDATE webhook_endpoints SET failure_count=failure_count+1,last_failure_at=now(),updated_at=now() WHERE id=${delivery.endpoint_id}`;}}return{processed:deliveries.length};}

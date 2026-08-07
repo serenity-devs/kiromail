@@ -1,0 +1,54 @@
+{
+  "name": "serenity-mail",
+  "version": "1.0.0-rc.1",
+  "private": true,
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "worker": "tsx worker/index.ts",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:bootstrap": "tsx scripts/bootstrap-admin.ts",
+    "db:seed": "npm run db:seed:demo",
+    "db:seed:demo": "tsx scripts/seed.ts --allow-demo-data",
+    "db:setup": "npm run db:migrate && npm run db:bootstrap && npm run db:seed:demo",
+    "db:setup:production": "npm run db:migrate && npm run db:bootstrap",
+    "smoke": "tsx scripts/smoke.ts",
+    "test": "tsx --test tests/**/*.test.ts",
+    "verify:production": "node scripts/verify-production.mjs",
+    "verify:bootstrap": "bash scripts/verify-production-bootstrap.sh",
+    "verify:upgrade": "bash scripts/verify-upgrade-rollback.sh",
+    "prod:secrets": "sh scripts/init-production-secrets.sh",
+    "lint": "eslint . --ignore-pattern .next"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1102.0",
+    "@aws-sdk/client-sesv2": "^3.1102.0",
+    "bullmq": "^6.0.6",
+    "csv-parse": "^7.0.2",
+    "ioredis": "^6.0.0",
+    "lucide-react": "^1.28.0",
+    "next": "^16.3.0",
+    "nodemailer": "^9.0.3",
+    "postgres": "^3.4.9",
+    "qrcode": "^1.5.4",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "@types/nodemailer": "^8.0.1",
+    "@types/qrcode": "^1.5.6",
+    "@types/react": "19.2.14",
+    "@types/react-dom": "19.2.3",
+    "eslint": "9.39.4",
+    "eslint-config-next": "^16.3.0",
+    "tsx": "^4.23.5",
+    "typescript": "5.9.3"
+  },
+  "type": "module"
+}

@@ -1,0 +1,141 @@
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: null
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets: [postgres_password]
+
+  redis:
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$(cat /run/secrets/redis_password)\""]
+    secrets: [redis_password]
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$(cat /run/secrets/redis_password)\" ping"]
+
+  mailpit:
+    profiles: ["development"]
+    ports: !reset []
+
+  migrate:
+    command: npm run db:setup:production
+    environment:
+      DATABASE_URL: null
+      REDIS_URL: null
+      ADMIN_PASSWORD: null
+      SESSION_SECRET: null
+      DATA_ENCRYPTION_KEY: null
+      DATABASE_URL_FILE: /run/secrets/database_url
+      REDIS_URL_FILE: /run/secrets/redis_url
+      ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      SESSION_SECRET_FILE: /run/secrets/session_secret
+      DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
+    secrets: [database_url,redis_url,admin_password,session_secret,data_encryption_key]
+
+  app:
+    ports: !reset []
+    environment:
+      APP_URL: https://${APP_DOMAIN:?Define APP_DOMAIN}
+      DATABASE_URL: null
+      REDIS_URL: null
+      ADMIN_PASSWORD: null
+      SESSION_SECRET: null
+      DATA_ENCRYPTION_KEY: null
+      METRICS_TOKEN: null
+      AWS_ACCESS_KEY_ID: null
+      AWS_SECRET_ACCESS_KEY: null
+      AWS_SESSION_TOKEN: null
+      DATABASE_URL_FILE: /run/secrets/database_url
+      REDIS_URL_FILE: /run/secrets/redis_url
+      ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      SESSION_SECRET_FILE: /run/secrets/session_secret
+      DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
+      METRICS_TOKEN_FILE: /run/secrets/metrics_token
+      AWS_ACCESS_KEY_ID_FILE: /run/secrets/aws_access_key_id
+      AWS_SECRET_ACCESS_KEY_FILE: /run/secrets/aws_secret_access_key
+      AWS_SESSION_TOKEN_FILE: /run/secrets/aws_session_token
+      TRUST_PROXY: "true"
+    secrets: [database_url,redis_url,admin_password,session_secret,data_encryption_key,metrics_token,aws_access_key_id,aws_secret_access_key,aws_session_token]
+
+  worker:
+    environment:
+      APP_URL: https://${APP_DOMAIN:?Define APP_DOMAIN}
+      DATABASE_URL: null
+      REDIS_URL: null
+      ADMIN_PASSWORD: null
+      SESSION_SECRET: null
+      DATA_ENCRYPTION_KEY: null
+      AWS_ACCESS_KEY_ID: null
+      AWS_SECRET_ACCESS_KEY: null
+      AWS_SESSION_TOKEN: null
+      DATABASE_URL_FILE: /run/secrets/database_url
+      REDIS_URL_FILE: /run/secrets/redis_url
+      ADMIN_PASSWORD_FILE: /run/secrets/admin_password
+      SESSION_SECRET_FILE: /run/secrets/session_secret
+      DATA_ENCRYPTION_KEY_FILE: /run/secrets/data_encryption_key
+      AWS_ACCESS_KEY_ID_FILE: /run/secrets/aws_access_key_id
+      AWS_SECRET_ACCESS_KEY_FILE: /run/secrets/aws_secret_access_key
+      AWS_SESSION_TOKEN_FILE: /run/secrets/aws_session_token
+      TRUST_PROXY: "true"
+    secrets: [database_url,redis_url,admin_password,session_secret,data_encryption_key,aws_access_key_id,aws_secret_access_key,aws_session_token]
+
+  backup:
+    environment:
+      DATABASE_URL: null
+      BACKUP_ENCRYPTION_PASSPHRASE: null
+      PGPASSWORD: null
+      DATABASE_URL_FILE: /run/secrets/database_url
+      BACKUP_ENCRYPTION_PASSPHRASE_FILE: /run/secrets/backup_passphrase
+    secrets: [database_url,backup_passphrase]
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Define APP_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile.example:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: ${DOCKER_LOG_MAX_SIZE:-20m}
+        max-file: ${DOCKER_LOG_MAX_FILES:-5}
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password
+  database_url:
+    file: ./secrets/database_url
+  redis_password:
+    file: ./secrets/redis_password
+  redis_url:
+    file: ./secrets/redis_url
+  admin_password:
+    file: ./secrets/admin_password
+  session_secret:
+    file: ./secrets/session_secret
+  data_encryption_key:
+    file: ./secrets/data_encryption_key
+  metrics_token:
+    file: ./secrets/metrics_token
+  backup_passphrase:
+    file: ./secrets/backup_passphrase
+  aws_access_key_id:
+    file: ./secrets/aws_access_key_id
+  aws_secret_access_key:
+    file: ./secrets/aws_secret_access_key
+  aws_session_token:
+    file: ./secrets/aws_session_token
+
+volumes:
+  caddy_data:
+  caddy_config:

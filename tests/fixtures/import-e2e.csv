@@ -1,0 +1,4 @@
+email,nombre,ciudad,frecuencia
+import-job-e2e@example.com,Irene,Valencia,mensual
+correo-invalido,Fila,Barcelona,semanal
+import-job-e2e@example.com,Duplicada,Madrid,semanal

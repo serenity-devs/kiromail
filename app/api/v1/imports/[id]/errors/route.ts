@@ -1,0 +1,5 @@
+import { NextResponse } from "next/server";
+import { authenticateApiRequest } from "@/lib/api-auth";
+import { readJobFile } from "@/lib/data-jobs";
+import { sql } from "@/lib/db";
+export async function GET(request:Request,context:{params:Promise<{id:string}>}){const principal=await authenticateApiRequest(request,"contacts:read");if(!principal)return NextResponse.json({error:{code:"unauthorized",message:"No autorizado"}},{status:401});const{id}=await context.params;const[job]=await sql<{errors_storage_key:string|null}[]>`SELECT errors_storage_key FROM background_jobs WHERE id=${id} AND type='contacts_import'`;if(!job?.errors_storage_key)return NextResponse.json({error:{code:"not_found",message:"No hay archivo de errores"}},{status:404});const content=await readJobFile(job.errors_storage_key);return new NextResponse(new Uint8Array(content),{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":`attachment; filename="import-${id}-errors.csv"`,"Cache-Control":"private, no-store"}});}

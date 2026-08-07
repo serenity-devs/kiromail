@@ -1,0 +1,1 @@
+export default function ConfirmDonePage(){return <main className="public-page"><section className="public-card"><div className="brand-mark brand-mark-large">S</div><p className="eyebrow">Suscripción confirmada</p><h1>Ya está todo listo.</h1><p>Tu suscripción está activa. Empezarás a recibir los próximos envíos de esta lista.</p></section></main>;}

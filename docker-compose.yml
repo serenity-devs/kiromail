@@ -1,0 +1,186 @@
+x-app-environment: &app-environment
+  DATABASE_URL: postgres://serenity:serenity@postgres:5432/serenity_mail
+  REDIS_URL: redis://redis:6379
+  APP_URL: ${APP_URL:-http://localhost:3100}
+  ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@serenity.local}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-serenity-local-2026}
+  SESSION_SECRET: ${SESSION_SECRET:-local-only-change-this-before-production}
+  MAIL_TRANSPORT: ${MAIL_TRANSPORT:-}
+  SMTP_HOST: mailpit
+  SMTP_PORT: 1025
+  AWS_REGION: ${AWS_REGION:-}
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+  AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+  UPLOAD_DIR: /app/uploads
+  CONTENT_STORAGE_DIR: /app/message-content
+  CONTENT_STORAGE: ${CONTENT_STORAGE:-}
+  S3_BUCKET: ${S3_BUCKET:-}
+  S3_PREFIX: ${S3_PREFIX:-serenity-mail}
+  S3_ENDPOINT: ${S3_ENDPOINT:-}
+  S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
+  SNS_TOPIC_ARNS: ${SNS_TOPIC_ARNS:-}
+  DATA_ENCRYPTION_KEY: ${DATA_ENCRYPTION_KEY:-local-only-change-this-before-production}
+  ALLOW_PRIVATE_WEBHOOKS: ${ALLOW_PRIVATE_WEBHOOKS:-false}
+  TRANSACTIONAL_ATTACHMENT_MAX_BYTES: ${TRANSACTIONAL_ATTACHMENT_MAX_BYTES:-8388608}
+  TRANSACTIONAL_MIME_MAX_BYTES: ${TRANSACTIONAL_MIME_MAX_BYTES:-40000000}
+  TRUST_PROXY: ${TRUST_PROXY:-false}
+  API_RATE_LIMIT_PER_MINUTE: ${API_RATE_LIMIT_PER_MINUTE:-600}
+  SESSION_RATE_LIMIT_PER_MINUTE: ${SESSION_RATE_LIMIT_PER_MINUTE:-900}
+  PUBLIC_RATE_LIMIT_PER_MINUTE: ${PUBLIC_RATE_LIMIT_PER_MINUTE:-30}
+  METRICS_TOKEN: ${METRICS_TOKEN:-}
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${DOCKER_LOG_MAX_SIZE:-20m}
+    max-file: ${DOCKER_LOG_MAX_FILES:-5}
+
+services:
+  postgres:
+    image: postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+    # PostgreSQL parallel queries use POSIX shared memory. Docker's 64 MiB
+    # default is insufficient for concurrent listings at the 100k baseline.
+    shm_size: "${POSTGRES_SHM_SIZE:-256mb}"
+    environment:
+      POSTGRES_DB: serenity_mail
+      POSTGRES_USER: serenity
+      POSTGRES_PASSWORD: serenity
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      # The init-only PostgreSQL server listens on Unix sockets. TCP proves the
+      # final server is running, so migrations cannot race first initialization.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U serenity -d serenity_mail"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    logging: *default-logging
+
+  redis:
+    image: redis:7-alpine@sha256:02f2cc4882f8bf87c79a220ac958f58c700bdec0dfb9b9ea61b62fb0e8f1bfcf
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+    logging: *default-logging
+
+  mailpit:
+    image: axllent/mailpit@sha256:7c38788069433ba9d2d9131abac8d17da0fb18f09b689207ec7a773dcb8d6eee
+    ports:
+      - "8026:8025"
+    volumes:
+      - mailpit_data:/data
+    environment:
+      MP_DATABASE: /data/mailpit.db
+      MP_MAX_MESSAGES: 5000
+    restart: unless-stopped
+    logging: *default-logging
+
+  migrate:
+    build: .
+    command: npm run db:setup
+    environment: *app-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    logging: *default-logging
+
+  app:
+    build: .
+    environment: *app-environment
+    ports:
+      - "3100:3000"
+    volumes:
+      - uploads_data:/app/uploads
+      - content_data:/app/message-content
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  worker:
+    build: .
+    command: npm run worker
+    environment:
+      <<: *app-environment
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-5}
+      SEND_RATE_PER_SECOND: ${SEND_RATE_PER_SECOND:-10}
+      TRANSACTIONAL_WORKER_CONCURRENCY: ${TRANSACTIONAL_WORKER_CONCURRENCY:-4}
+      TRANSACTIONAL_SEND_RATE_PER_SECOND: ${TRANSACTIONAL_SEND_RATE_PER_SECOND:-2}
+      DATA_WORKER_CONCURRENCY: ${DATA_WORKER_CONCURRENCY:-1}
+    volumes:
+      - uploads_data:/app/uploads
+      - content_data:/app/message-content
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 60s
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+  backup:
+    profiles: ["ops"]
+    build:
+      context: .
+      dockerfile: Dockerfile.backup
+    environment:
+      DATABASE_URL: postgres://serenity:serenity@postgres:5432/serenity_mail
+      BACKUP_ENCRYPTION_PASSPHRASE: ${BACKUP_ENCRYPTION_PASSPHRASE:-}
+      BACKUP_ENCRYPTION_PASSPHRASE_FILE: ${BACKUP_ENCRYPTION_PASSPHRASE_FILE:-}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: serenity
+      PGPASSWORD: serenity
+    volumes:
+      - uploads_data:/data/uploads:ro
+      - content_data:/data/message-content:ro
+      - backup_data:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+
+volumes:
+  postgres_data:
+  redis_data:
+  mailpit_data:
+  uploads_data:
+  content_data:
+  backup_data:
