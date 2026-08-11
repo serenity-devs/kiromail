@@ -66,6 +66,30 @@ test("theme selection is persisted and exposed in the complete settings page", (
   );
 });
 
+test("Terminal replaces light application chrome while preserving email previews", () => {
+  const terminalOverrides = css.slice(css.indexOf("/* Terminal uses the same surface hierarchy"));
+  for (const selector of [
+    ".report-notes article",
+    ".button-danger",
+    ".modal>header",
+    ".modal-actions",
+    ".login-panel",
+    ".api-docs-shell",
+    ".api-endpoint>header",
+    ".template-studio",
+    ".studio-tool-strip",
+    ".theme-controls",
+    ".starter-gallery button",
+    ".block-palette button",
+    ".studio-canvas",
+  ]) {
+    assert.ok(terminalOverrides.includes(selector), `${selector} must have a Terminal surface override`);
+  }
+  assert.match(css, /\.template-preview iframe \{[^}]*background: white/);
+  assert.match(css, /\.canvas-device iframe \{[^}]*background: white/);
+  assert.match(css, /\.message-preview \{[^}]*background: white/);
+});
+
 test("operations panels have scoped responsive padding", () => {
   assert.match(css, /\.operations-grid>\.panel,\.dead-letter-panel,\.operations-runs \{ padding:22px 24px; \}/);
   assert.match(css, /\.operations-grid>\.panel,\.dead-letter-panel,\.operations-runs \{ padding:19px 18px; \}/);
