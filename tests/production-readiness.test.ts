@@ -11,6 +11,8 @@ const deployWorkflow = readFileSync(".github/workflows/deploy.yml", "utf8");
 const deployScript = readFileSync("deploy/kiromail-deploy", "utf8");
 const updateScript = readFileSync("deploy/kiromail-update", "utf8");
 const containerEntrypoint = readFileSync("docker-entrypoint.sh", "utf8");
+const productionSecrets = readFileSync("scripts/init-production-secrets.sh", "utf8");
+const queueSource = readFileSync("lib/queue.ts", "utf8");
 const demoSeed = readFileSync("scripts/seed.ts", "utf8");
 const productionGuide = readFileSync("docs/produccion.md", "utf8");
 
@@ -43,6 +45,17 @@ test("the non-root runtime receives private copies of Compose bind-mounted secre
   assert.match(containerEntrypoint, /chmod 0400 "\$secret_target"/);
   assert.match(containerEntrypoint, /chown kiromail:kiromail "\$secret_target"/);
   assert.match(containerEntrypoint, /su-exec kiromail/);
+});
+
+test("database connection secrets avoid reserved URL characters", () => {
+  assert.match(productionSecrets, /openssl rand -hex "\$bytes"/);
+  assert.match(productionSecrets, /create_random_url_secret "\$secrets_dir\/postgres_password"/);
+  assert.match(productionSecrets, /create_random_url_secret "\$secrets_dir\/redis_password"/);
+});
+
+test("Redis credentials are decoded before BullMQ authenticates", () => {
+  assert.match(queueSource, /password: redis\.password \? decodeURIComponent\(redis\.password\)/);
+  assert.match(queueSource, /username: redis\.username \? decodeURIComponent\(redis\.username\)/);
 });
 
 test("GitHub deployment publishes verified immutable archives without VPS credentials", () => {

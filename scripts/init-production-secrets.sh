@@ -22,6 +22,19 @@ create_random_secret() {
   echo "Creado: $target"
 }
 
+create_random_url_secret() {
+  target="$1"
+  bytes="$2"
+  if [ -e "$target" ]; then
+    echo "Conservado: $target"
+    return
+  fi
+  # Hex avoids reserved URI characters in DATABASE_URL and REDIS_URL.
+  openssl rand -hex "$bytes" > "$target"
+  chmod 0600 "$target"
+  echo "Creado: $target"
+}
+
 create_empty_secret() {
   target="$1"
   if [ -e "$target" ]; then
@@ -33,8 +46,8 @@ create_empty_secret() {
   echo "Creado vacío: $target"
 }
 
-create_random_secret "$secrets_dir/postgres_password" 32
-create_random_secret "$secrets_dir/redis_password" 32
+create_random_url_secret "$secrets_dir/postgres_password" 32
+create_random_url_secret "$secrets_dir/redis_password" 32
 create_random_secret "$secrets_dir/admin_password" 36
 create_random_secret "$secrets_dir/session_secret" 48
 create_random_secret "$secrets_dir/data_encryption_key" 48

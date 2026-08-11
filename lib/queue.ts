@@ -6,8 +6,8 @@ const redis = new URL(env.redisUrl);
 export const redisConnection = {
   host: redis.hostname,
   port: Number(redis.port || 6379),
-  username: redis.username || undefined,
-  password: redis.password || undefined,
+  username: redis.username ? decodeURIComponent(redis.username) : undefined,
+  password: redis.password ? decodeURIComponent(redis.password) : undefined,
   db: redis.pathname.length > 1 ? Number(redis.pathname.slice(1)) : 0,
   tls: redis.protocol === "rediss:" ? {} : undefined,
   maxRetriesPerRequest: null,

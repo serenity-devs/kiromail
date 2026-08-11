@@ -217,9 +217,11 @@ el alias `kiromail-app`.
    KIROMAIL_SECRETS_DIR=/opt/kiromail/secrets kiromail-init-secrets
    ```
 
-4. Añade `deploy/Caddyfile.kiromail` al Caddy compartido, valida primero su
-   configuración y usa `caddy reload`; no es necesario reiniciar el proxy ni la
-   aplicación que ya atiende.
+4. Añade `deploy/Caddyfile.kiromail` al Caddy compartido y valida primero su
+   configuración. Si el admin de Caddy está deshabilitado, actualiza el archivo
+   sin sustituir su inode y envía `SIGUSR1`; si el archivo es un bind mount que
+   ya fue sustituido, recrea únicamente el contenedor del proxy. No reinicies la
+   aplicación ni la base de datos que ya atienden.
 5. Inicia la comprobación automática con
    `systemctl start kiromail-update.timer`. El timer ya queda habilitado para
    futuros arranques.
