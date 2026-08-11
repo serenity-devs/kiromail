@@ -7,8 +7,8 @@ import { ArrowRight, CheckCircle2, Mail, ShieldCheck } from "lucide-react";
 
 export function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@serenity.local");
-  const [password, setPassword] = useState("serenity-local-2026");
+  const [email, setEmail] = useState("admin@kiromail.local");
+  const [password, setPassword] = useState("kiromail-local-2026");
   const [mfaCode, setMfaCode] = useState("");
   const [mfaRequired, setMfaRequired] = useState(false);
   const [error, setError] = useState("");
@@ -27,7 +27,7 @@ export function LoginForm() {
   return (
     <main className="login-page">
       <section className="login-story">
-        <div className="login-brand"><span className="brand-mark">S</span><span>serenity mail</span></div>
+        <div className="login-brand"><span className="brand-mark" aria-hidden="true" /><span>KiroMail</span></div>
         <div className="login-copy">
           <p className="eyebrow light">Email marketing, en tu terreno</p>
           <h1>Campañas claras.<br /><em>Sin ruido alrededor.</em></h1>

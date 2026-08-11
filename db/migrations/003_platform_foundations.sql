@@ -1,4 +1,4 @@
--- Serenity Mail 1.1 foundations. This migration is deliberately additive where
+-- KiroMail 1.1 foundations. This migration is deliberately additive where
 -- practical and preserves legacy columns until all compatibility code is gone.
 
 ALTER TABLE contact_lists RENAME TO subscriptions;

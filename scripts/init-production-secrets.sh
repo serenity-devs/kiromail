@@ -52,7 +52,7 @@ fi
 
 database_url_file="$secrets_dir/database_url"
 if [ ! -e "$database_url_file" ]; then
-  printf 'postgres://serenity:%s@postgres:5432/serenity_mail' "$postgres_password" > "$database_url_file"
+  printf 'postgres://kiromail:%s@postgres:5432/kiromail' "$postgres_password" > "$database_url_file"
   chmod 0600 "$database_url_file"
   echo "Creado: $database_url_file"
 else

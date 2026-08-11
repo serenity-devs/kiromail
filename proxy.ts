@@ -65,7 +65,7 @@ function limitFor(request: NextRequest) {
   if (pathname.startsWith("/api/public/") || pathname.startsWith("/api/auth/") || pathname === "/api/unsubscribe") {
     return { key: `public:${address(request)}`, limit: env.publicRateLimitPerMinute };
   }
-  if (request.cookies.has("serenity_session")) return { key: `session:${address(request)}`, limit: env.sessionRateLimitPerMinute };
+  if (request.cookies.has("kiromail_session")) return { key: `session:${address(request)}`, limit: env.sessionRateLimitPerMinute };
   return { key: `anonymous:${address(request)}`, limit: env.publicRateLimitPerMinute };
 }
 
@@ -75,7 +75,7 @@ export async function proxy(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-request-id", requestId);
 
-  if (request.nextUrl.pathname.startsWith("/api/") && unsafeMethods.has(request.method) && request.cookies.has("serenity_session") && !request.headers.has("authorization") && !csrfIsValid(request)) {
+  if (request.nextUrl.pathname.startsWith("/api/") && unsafeMethods.has(request.method) && request.cookies.has("kiromail_session") && !request.headers.has("authorization") && !csrfIsValid(request)) {
     return rejected(request, requestId, 403, "csrf_rejected", "La petición no procede del origen autorizado");
   }
 

@@ -1021,9 +1021,9 @@ export function MailApp() {
     <div className="app-shell">
       <aside className={`sidebar ${mobileOpen ? "is-open" : ""}`}>
         <div className="sidebar-head">
-          <span className="brand-mark">S</span>
+          <span className="brand-mark" aria-hidden="true" />
           <span className="brand-name">
-            serenity <b>mail</b>
+            Kiro<b>Mail</b>
           </span>
           <button
             className="icon-button sidebar-close"
@@ -1038,7 +1038,7 @@ export function MailApp() {
           <span>
             <small>Espacio de trabajo</small>
             <strong>
-              {data?.settings.organization_name ?? "Serenity Studio"}
+              {data?.settings.organization_name ?? "KiroMail Studio"}
             </strong>
           </span>
           <ChevronDown size={15} />
@@ -1141,7 +1141,7 @@ export function MailApp() {
               <Menu size={20} />
             </button>
             <div>
-              <span className="topbar-kicker">Serenity Mail</span>
+              <span className="topbar-kicker">KiroMail</span>
               <h1>{title}</h1>
             </div>
           </div>
@@ -1256,7 +1256,7 @@ export function MailApp() {
 function LoadingState() {
   return (
     <div className="loading-page">
-      <div className="loading-mark">S</div>
+      <div className="loading-mark" aria-hidden="true" />
       <p>Preparando tu espacio…</p>
     </div>
   );
@@ -1313,7 +1313,7 @@ function Dashboard({
       <section className="welcome-row">
         <div>
           <p className="eyebrow">Martes, día de crear</p>
-          <h2>Buenos días, Serenity.</h2>
+          <h2>Buenos días.</h2>
           <p>Tu próxima campaña está a unos pocos pasos.</p>
         </div>
         {canEdit && (
@@ -7067,7 +7067,7 @@ function DeliverabilityView({
             <CircleAlert size={17} />
             <p>
               Virtual Deliverability Manager es compatible de forma opcional. No
-              es necesario para operar Serenity Mail.
+              es necesario para operar KiroMail.
             </p>
           </div>
         </section>
@@ -7764,7 +7764,7 @@ function SettingsView({ data, refresh, notify }: ViewProps) {
                   <label className="full">
                     Fuente de aperturas y clics
                     <select name="ses_tracking_source" defaultValue={data.settings.ses_tracking_source}>
-                      <option value="local">Serenity Mail · URLs firmadas</option>
+                      <option value="local">KiroMail · URLs firmadas</option>
                       <option value="ses">Amazon SES · eventos del Configuration Set</option>
                     </select>
                   </label>

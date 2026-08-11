@@ -1,4 +1,4 @@
-# Puesta en producción de Serenity Mail
+# Puesta en producción de KiroMail
 
 Esta guía describe una instalación nueva en un único servidor con Docker
 Compose, Caddy y Amazon SES. Los comandos se ejecutan desde la raíz del
@@ -137,9 +137,9 @@ servidor no protege frente a pérdida física. Replica los `.enc` y `.sha256` a
 un destino externo con cifrado y control de acceso.
 
 ```bash
-./scripts/prod-compose.sh --profile ops run --rm backup /opt/serenity/backup.sh
+./scripts/prod-compose.sh --profile ops run --rm backup /opt/kiromail/backup.sh
 ./scripts/prod-compose.sh --profile ops run --rm backup \
-  /opt/serenity/restore-test.sh /backups/serenity-AAAAMMDDTHHMMSSZ.tar.gz.enc
+  /opt/kiromail/restore-test.sh /backups/kiromail-AAAAMMDDTHHMMSSZ.tar.gz.enc
 ```
 
 Restauración completa:
@@ -147,8 +147,8 @@ Restauración completa:
 ```bash
 ./scripts/prod-compose.sh stop app worker
 ./scripts/prod-compose.sh --profile ops run --rm \
-  -e CONFIRM_RESTORE=RESTORE_SERENITY_MAIL \
-  backup /opt/serenity/restore.sh /backups/serenity-AAAAMMDDTHHMMSSZ.tar.gz.enc
+  -e CONFIRM_RESTORE=RESTORE_KIROMAIL \
+  backup /opt/kiromail/restore.sh /backups/kiromail-AAAAMMDDTHHMMSSZ.tar.gz.enc
 ./scripts/prod-compose.sh up -d app worker
 curl --fail "https://${APP_DOMAIN}/api/health/ready"
 ```
@@ -162,7 +162,7 @@ Antes de actualizar:
 
 ```bash
 npm run verify:upgrade
-./scripts/prod-compose.sh --profile ops run --rm backup /opt/serenity/backup.sh
+./scripts/prod-compose.sh --profile ops run --rm backup /opt/kiromail/backup.sh
 ```
 
 Despliegue ordenado:

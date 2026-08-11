@@ -9,7 +9,7 @@ export async function GET(request:Request){
   const report=await getAudienceReport({from,to,listId});
   if(url.searchParams.get("format")==="csv"){
     await sql`INSERT INTO audit_log(action,entity_type,user_id,api_key_id,detail)VALUES('export','audience_report',${principal.kind==="session"?principal.id:null},${principal.kind==="api_key"?principal.id:null},${sql.json({from,to,list_id:listId})})`;
-    return new Response(csv([["Fecha","Altas","Bajas","Neto"],...report.daily.map(row=>[String(row.date),Number(row.additions),Number(row.removals),Number(row.additions)-Number(row.removals)])]),{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":'attachment; filename="serenity-mail-audiencia.csv"'}});
+    return new Response(csv([["Fecha","Altas","Bajas","Neto"],...report.daily.map(row=>[String(row.date),Number(row.additions),Number(row.removals),Number(row.additions)-Number(row.removals)])]),{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":'attachment; filename="kiromail-audiencia.csv"'}});
   }
   return NextResponse.json(report);
 }

@@ -5,7 +5,7 @@ import { sql } from "./db";
 import { decryptTotpSecret, matchRecoveryCode, verifyTotp } from "./mfa";
 import { hashPassword, verifyPassword } from "./passwords";
 
-const COOKIE_NAME = "serenity_session";
+const COOKIE_NAME = "kiromail_session";
 const sessionDays = 7;
 
 export type UserRole = "admin" | "editor" | "analyst";

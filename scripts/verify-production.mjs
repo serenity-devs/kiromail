@@ -7,8 +7,8 @@ function secret(name, fallback = "") {
 }
 
 const baseUrl = (process.env.VERIFY_BASE_URL ?? process.env.APP_URL ?? "http://localhost:3100").replace(/\/$/, "");
-const adminEmail = process.env.ADMIN_EMAIL ?? "admin@serenity.local";
-const adminPassword = secret("ADMIN_PASSWORD", "serenity-local-2026");
+const adminEmail = process.env.ADMIN_EMAIL ?? "admin@kiromail.local";
+const adminPassword = secret("ADMIN_PASSWORD", "kiromail-local-2026");
 const runId = randomUUID();
 const checks = [];
 
@@ -18,7 +18,7 @@ function check(condition, message, detail) {
 }
 
 function sessionCookie(response) {
-  const value = response.headers.get("set-cookie")?.match(/serenity_session=[^;]+/)?.[0];
+  const value = response.headers.get("set-cookie")?.match(/kiromail_session=[^;]+/)?.[0];
   if (!value) throw new Error("La respuesta de acceso no contiene la cookie de sesión");
   return value;
 }
@@ -91,7 +91,7 @@ try {
   check(Object.values(operations.body?.queues ?? {}).every((queue) => Number(queue.failed ?? 0) === 0), "Colas sin trabajos fallidos");
 
   const metrics = await request("/api/metrics", { headers: { Cookie: adminCookie } });
-  check(metrics.response.status === 200 && String(metrics.body).includes("serenity_up 1"), "Métricas Prometheus disponibles");
+  check(metrics.response.status === 200 && String(metrics.body).includes("kiromail_up 1"), "Métricas Prometheus disponibles");
 
   const csrf = await jsonRequest("/api/users", "POST", {
     email: `csrf-${runId}@example.test`, name: "CSRF rechazado", role: "analyst", password: randomBytes(24).toString("base64url"),

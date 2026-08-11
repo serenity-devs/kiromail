@@ -49,7 +49,7 @@ try {
     VALUES(${suppressedEmail},'manual','transactional_batch_e2e','all',${sql.json({ run_id: runId })})
   `;
 
-  const pdf = Buffer.from(`%PDF-1.4\n% Serenity Mail E2E ${runId}\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n`);
+  const pdf = Buffer.from(`%PDF-1.4\n% KiroMail E2E ${runId}\n1 0 obj<</Type/Catalog>>endobj\n%%EOF\n`);
   const form = new FormData();
   form.append("file", new Blob([pdf], { type: "application/pdf" }), `factura-${runId}.pdf`);
   form.append("name", `Factura E2E ${runId.slice(0, 8)}`);

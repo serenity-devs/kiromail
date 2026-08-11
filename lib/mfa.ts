@@ -50,7 +50,7 @@ export function verifyTotp(secret: string, candidate: string, now = Date.now()) 
   });
 }
 
-export function totpUri(secret: string, email: string, issuer = "Serenity Mail") {
+export function totpUri(secret: string, email: string, issuer = "KiroMail") {
   return `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(email)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
 }
 
@@ -68,7 +68,7 @@ export function decryptTotpSecret(secret: string) {
 }
 
 function recoveryHash(code: string) {
-  return createHash("sha256").update(`serenity-mfa:${code.trim().toUpperCase()}`).digest("hex");
+  return createHash("sha256").update(`kiromail-mfa:${code.trim().toUpperCase()}`).digest("hex");
 }
 
 export function generateRecoveryCodes(count = 8) {

@@ -40,10 +40,10 @@ export async function buildTransactionalMime(input: TransactionalMimeInput): Pro
     html: input.html,
     text: input.text,
     date: input.acceptedAt,
-    messageId: `<${input.messageId}@serenity-mail.local>`,
+    messageId: `<${input.messageId}@kiromail.local>`,
     headers: {
-      "X-Serenity-Message": input.messageId,
-      "X-Serenity-Channel": "transactional",
+      "X-KiroMail-Message": input.messageId,
+      "X-KiroMail-Channel": "transactional",
     },
     attachments: (input.attachments ?? []).map((item) => ({
       filename: item.filename,

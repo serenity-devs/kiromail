@@ -41,7 +41,7 @@ export async function authenticateApiRequest(request: Request, requiredScope: st
 
 export async function createApiKey(input: { name: string; scopes: string[]; expiresAt?: Date | null }) {
   const prefix = randomBytes(6).toString("hex");
-  const token = `sm_live_${prefix}_${randomBytes(32).toString("base64url")}`;
+  const token = `km_live_${prefix}_${randomBytes(32).toString("base64url")}`;
   const [key] = await sql<{ id: string; name: string; prefix: string; scopes: string[]; expires_at: Date | null; created_at: Date }[]>`
     INSERT INTO api_keys (name, prefix, secret_hash, scopes, expires_at)
     VALUES (${input.name}, ${prefix}, ${hashSecret(token)}, ${input.scopes}, ${input.expiresAt ?? null})

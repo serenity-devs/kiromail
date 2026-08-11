@@ -1,6 +1,6 @@
 {
-  "name": "serenity-mail",
-  "version": "1.0.0-rc.1",
+  "name": "kiromail",
+  "version": "1.0.0-rc.2",
   "private": true,
   "engines": {
     "node": ">=22.0.0"

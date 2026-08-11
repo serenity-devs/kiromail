@@ -388,8 +388,8 @@ export async function sendTechnicalTest(recipient: string) {
   const transport = effectiveTransport(settings);
   const region = effectiveRegion(settings);
   const started = performance.now();
-  const subject = `[Serenity Mail] Prueba técnica ${new Date().toISOString()}`;
-  const html = `<main style="font-family:Arial,sans-serif;max-width:620px;margin:auto;padding:32px"><h1>Conexión correcta</h1><p>Serenity Mail ha enviado esta prueba mediante <strong>${transport === "ses" ? "Amazon SES" : "Mailpit local"}</strong>.</p><p>Región configurada: ${region}</p></main>`;
+  const subject = `[KiroMail] Prueba técnica ${new Date().toISOString()}`;
+  const html = `<main style="font-family:Arial,sans-serif;max-width:620px;margin:auto;padding:32px"><h1>Conexión correcta</h1><p>KiroMail ha enviado esta prueba mediante <strong>${transport === "ses" ? "Amazon SES" : "Mailpit local"}</strong>.</p><p>Región configurada: ${region}</p></main>`;
   let providerMessageId: string;
   if (transport === "ses") {
     const client = new SESv2Client({ region, credentials: env.awsCredentials });
@@ -399,7 +399,7 @@ export async function sendTechnicalTest(recipient: string) {
     } finally { client.destroy(); }
   } else {
     const transportClient = nodemailer.createTransport({ host: env.smtpHost, port: env.smtpPort, secure: false });
-    const response = await transportClient.sendMail({ from: `${settings.default_from_name} <${settings.default_from_email}>`, to: recipient, replyTo: settings.default_reply_to || undefined, subject, html, text: `Conexión correcta. Transporte Mailpit local. Región configurada ${region}.`, headers: { "X-Serenity-Diagnostic": "true" } });
+    const response = await transportClient.sendMail({ from: `${settings.default_from_name} <${settings.default_from_email}>`, to: recipient, replyTo: settings.default_reply_to || undefined, subject, html, text: `Conexión correcta. Transporte Mailpit local. Región configurada ${region}.`, headers: { "X-KiroMail-Diagnostic": "true" } });
     providerMessageId = response.messageId;
     transportClient.close();
   }

@@ -6,7 +6,7 @@ export function GET(request: Request) {
   return NextResponse.json(openApiDocument, {
     headers: {
       "Cache-Control": "public, max-age=300",
-      ...(download ? { "Content-Disposition": 'attachment; filename="serenity-mail-openapi.json"' } : {}),
+      ...(download ? { "Content-Disposition": 'attachment; filename="kiromail-openapi.json"' } : {}),
     },
   });
 }

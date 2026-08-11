@@ -26,7 +26,7 @@ async function verifyVersioned(path,patchBody,label){
 }
 
 try{
-  const login=await request("/api/auth/login",json("POST",{email:process.env.ADMIN_EMAIL??"admin@serenity.local",password:process.env.ADMIN_PASSWORD??"serenity-local-2026"}));assert.equal(login.response.status,200,"Login fallido");cookie=login.response.headers.get("set-cookie")?.split(";")[0]??"";assert.ok(cookie,"El login no devolvió cookie");
+  const login=await request("/api/auth/login",json("POST",{email:process.env.ADMIN_EMAIL??"admin@kiromail.local",password:process.env.ADMIN_PASSWORD??"kiromail-local-2026"}));assert.equal(login.response.status,200,"Login fallido");cookie=login.response.headers.get("set-cookie")?.split(";")[0]??"";assert.ok(cookie,"El login no devolvió cookie");
 
   const list=(await api("/api/v1/lists",json("POST",{key:`etag_${runId.replaceAll("-","").slice(0,16)}`,name:`ETag E2E ${runId.slice(0,8)}`,double_opt_in:false}),201)).body;created.list=list.id;
   const listUpdated=await verifyVersioned(`/api/v1/lists/${list.id}`,{description:`Escritor A ${runId}`},"lista");
@@ -51,7 +51,7 @@ try{
   const suppression=(await api("/api/v1/suppressions",json("POST",{email:`suppression-${runId}@example.com`,reason:"manual",scope:"marketing",note:"E2E"}),201)).body;created.suppression=suppression.id;
   await verifyVersioned(`/api/v1/suppressions/${suppression.id}`,{action:"resolve",note:"Escritor A"},"supresión");
 
-  const webhook=(await api("/api/v1/webhooks",json("POST",{name:`Webhook ETag ${runId.slice(0,8)}`,url:`https://example.com/serenity-${runId}`,events:["message.delivered"]}),201)).body;created.webhook=webhook.id;
+  const webhook=(await api("/api/v1/webhooks",json("POST",{name:`Webhook ETag ${runId.slice(0,8)}`,url:`https://example.com/kiromail-${runId}`,events:["message.delivered"]}),201)).body;created.webhook=webhook.id;
   await verifyVersioned(`/api/v1/webhooks/${webhook.id}`,{status:"disabled"},"webhook");
 
   const openapi=await api("/api/openapi");const listPatch=openapi.body.paths["/api/v1/lists/{id}"].patch;assert.ok(listPatch.parameters.some(item=>item.name==="If-Match"&&item.required),"OpenAPI no exige If-Match");assert.ok(listPatch.responses["412"]&&listPatch.responses["428"],"OpenAPI no documenta precondiciones");

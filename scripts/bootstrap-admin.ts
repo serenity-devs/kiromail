@@ -14,7 +14,7 @@ try {
     const passwordHash = await hashPassword(env.adminPassword);
     await sql`
       INSERT INTO users(email,name,password_hash,role,status)
-      VALUES(${email},'Serenity',${passwordHash},'admin','active')
+      VALUES(${email},'KiroMail',${passwordHash},'admin','active')
       ON CONFLICT(lower(email)) DO NOTHING
     `;
     console.log("Initial administrator is ready");

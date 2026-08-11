@@ -17,7 +17,7 @@ function remember(value: unknown): void {
 }
 
 function identityForUrl(url: string) {
-  const path = new URL(url, "http://serenity.local").pathname;
+  const path = new URL(url, "http://kiromail.local").pathname;
   const patterns: [RegExp, (match: RegExpExecArray) => string][] = [
     [/^\/api\/v1\/lists\/([^/]+)\/fields\/([^/]+)$/, match => `list-field:${match[1]}/${match[2]}`],
     [/^\/api\/v1\/lists\/([^/]+)\/subscriptions\/([^/]+)$/, match => `subscription:${match[1]}/${match[2]}`],

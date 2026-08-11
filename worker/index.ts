@@ -12,7 +12,7 @@ import { log } from "../lib/logger";
 const workerStartedAt=new Date();
 
 const worker = new Worker<{ recipientId: string }>(
-  "serenity-email",
+  "kiromail-email",
   async (job) => sendRecipient(job.data.recipientId),
   {
     connection: redisConnection,
@@ -25,7 +25,7 @@ const worker = new Worker<{ recipientId: string }>(
 );
 
 const transactionalWorker = new Worker<{ messageId: string }>(
-  "serenity-transactional",
+  "kiromail-transactional",
   async (job) => sendTransactionalMessage(job.data.messageId),
   {
     connection: redisConnection,
@@ -38,7 +38,7 @@ const transactionalWorker = new Worker<{ messageId: string }>(
 );
 
 const dataWorker = new Worker<{ jobId: string }>(
-  "serenity-data",
+  "kiromail-data",
   async (job) => processDataJob(job.data.jobId),
   { connection: redisConnection, concurrency: Number(process.env.DATA_WORKER_CONCURRENCY ?? 1) },
 );

@@ -134,7 +134,7 @@ export async function exportContactData(contactId: string, actor: ContactActor =
   await sql`INSERT INTO audit_log(action,entity_type,entity_id,user_id,api_key_id,detail) VALUES('privacy_export','contact',${contactId},${actor.userId ?? null},${actor.apiKeyId ?? null},${sql.json({ privacy_request_id: request.id })})`;
 
   return {
-    export: { request_id: request.id, generated_at: request.completed_at, format: "serenity-mail-contact-v1" },
+    export: { request_id: request.id, generated_at: request.completed_at, format: "kiromail-contact-v1" },
     contact,
     subscriptions,
     consent_events: consent,

@@ -9,7 +9,7 @@ export async function GET(request:Request){
   const report=await getTransactionalReport({from,to});
   if(url.searchParams.get("format")==="csv"){
     await sql`INSERT INTO audit_log(action,entity_type,user_id,api_key_id,detail)VALUES('export','transactional_report',${principal.kind==="session"?principal.id:null},${principal.kind==="api_key"?principal.id:null},${sql.json({from,to})})`;
-    return new Response(csv([["Fecha","Solicitados","Entregados","Fallidos","Abiertos","Clics"],...report.daily.map(row=>[String(row.date),Number(row.total),Number(row.delivered),Number(row.failed),Number(row.opened),Number(row.clicked)])]),{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":'attachment; filename="serenity-mail-transaccionales.csv"'}});
+    return new Response(csv([["Fecha","Solicitados","Entregados","Fallidos","Abiertos","Clics"],...report.daily.map(row=>[String(row.date),Number(row.total),Number(row.delivered),Number(row.failed),Number(row.opened),Number(row.clicked)])]),{headers:{"Content-Type":"text/csv; charset=utf-8","Content-Disposition":'attachment; filename="kiromail-transaccionales.csv"'}});
   }
   return NextResponse.json(report);
 }

@@ -3,13 +3,13 @@ import { env } from "./config";
 
 const databaseUrl = env.databaseUrl;
 
-const globalForDb = globalThis as unknown as { serenitySql?: ReturnType<typeof postgres> };
+const globalForDb = globalThis as unknown as { kiromailSql?: ReturnType<typeof postgres> };
 
-export const sql = globalForDb.serenitySql ?? postgres(databaseUrl, {
+export const sql = globalForDb.kiromailSql ?? postgres(databaseUrl, {
   max: Number(process.env.DB_POOL_SIZE ?? 10),
   idle_timeout: 20,
   connect_timeout: 10,
   transform: { undefined: null },
 });
 
-if (process.env.NODE_ENV !== "production") globalForDb.serenitySql = sql;
+if (process.env.NODE_ENV !== "production") globalForDb.kiromailSql = sql;

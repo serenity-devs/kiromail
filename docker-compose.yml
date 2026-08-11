@@ -1,9 +1,11 @@
+name: kiromail
+
 x-app-environment: &app-environment
-  DATABASE_URL: postgres://serenity:serenity@postgres:5432/serenity_mail
+  DATABASE_URL: postgres://kiromail:kiromail@postgres:5432/kiromail
   REDIS_URL: redis://redis:6379
   APP_URL: ${APP_URL:-http://localhost:3100}
-  ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@serenity.local}
-  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-serenity-local-2026}
+  ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@kiromail.local}
+  ADMIN_PASSWORD: ${ADMIN_PASSWORD:-kiromail-local-2026}
   SESSION_SECRET: ${SESSION_SECRET:-local-only-change-this-before-production}
   MAIL_TRANSPORT: ${MAIL_TRANSPORT:-}
   SMTP_HOST: mailpit
@@ -16,7 +18,7 @@ x-app-environment: &app-environment
   CONTENT_STORAGE_DIR: /app/message-content
   CONTENT_STORAGE: ${CONTENT_STORAGE:-}
   S3_BUCKET: ${S3_BUCKET:-}
-  S3_PREFIX: ${S3_PREFIX:-serenity-mail}
+  S3_PREFIX: ${S3_PREFIX:-kiromail}
   S3_ENDPOINT: ${S3_ENDPOINT:-}
   S3_FORCE_PATH_STYLE: ${S3_FORCE_PATH_STYLE:-false}
   SNS_TOPIC_ARNS: ${SNS_TOPIC_ARNS:-}
@@ -43,15 +45,15 @@ services:
     # default is insufficient for concurrent listings at the 100k baseline.
     shm_size: "${POSTGRES_SHM_SIZE:-256mb}"
     environment:
-      POSTGRES_DB: serenity_mail
-      POSTGRES_USER: serenity
-      POSTGRES_PASSWORD: serenity
+      POSTGRES_DB: kiromail
+      POSTGRES_USER: kiromail
+      POSTGRES_PASSWORD: kiromail
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
       # The init-only PostgreSQL server listens on Unix sockets. TCP proves the
       # final server is running, so migrations cannot race first initialization.
-      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U serenity -d serenity_mail"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U kiromail -d kiromail"]
       interval: 3s
       timeout: 3s
       retries: 20
@@ -153,15 +155,15 @@ services:
       context: .
       dockerfile: Dockerfile.backup
     environment:
-      DATABASE_URL: postgres://serenity:serenity@postgres:5432/serenity_mail
+      DATABASE_URL: postgres://kiromail:kiromail@postgres:5432/kiromail
       BACKUP_ENCRYPTION_PASSPHRASE: ${BACKUP_ENCRYPTION_PASSPHRASE:-}
       BACKUP_ENCRYPTION_PASSPHRASE_FILE: ${BACKUP_ENCRYPTION_PASSPHRASE_FILE:-}
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
       BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
       PGHOST: postgres
       PGPORT: 5432
-      PGUSER: serenity
-      PGPASSWORD: serenity
+      PGUSER: kiromail
+      PGPASSWORD: kiromail
     volumes:
       - uploads_data:/data/uploads:ro
       - content_data:/data/message-content:ro

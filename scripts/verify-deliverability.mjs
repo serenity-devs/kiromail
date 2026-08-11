@@ -1,6 +1,6 @@
 const base=process.env.APP_URL??"http://localhost:3100";const mailpit=process.env.MAILPIT_URL??"http://localhost:8026";const runId=crypto.randomUUID();let cookie="";let paused=false;
 function assert(condition,message){if(!condition)throw new Error(message);}
-async function login(){const response=await fetch(`${base}/api/auth/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:process.env.ADMIN_EMAIL??"admin@serenity.local",password:process.env.ADMIN_PASSWORD??"serenity-local-2026"})});assert(response.ok,`Login ${response.status}`);cookie=response.headers.get("set-cookie")?.split(";")[0]??"";assert(cookie,"Falta cookie de sesión");}
+async function login(){const response=await fetch(`${base}/api/auth/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:process.env.ADMIN_EMAIL??"admin@kiromail.local",password:process.env.ADMIN_PASSWORD??"kiromail-local-2026"})});assert(response.ok,`Login ${response.status}`);cookie=response.headers.get("set-cookie")?.split(";")[0]??"";assert(cookie,"Falta cookie de sesión");}
 async function request(path,options={}){const response=await fetch(`${base}${path}`,{...options,headers:{Cookie:cookie,...(options.body?{"Content-Type":"application/json"}:{}),...options.headers}});const body=await response.json().catch(()=>({}));return{response,body};}
 async function api(path,options={}){const result=await request(path,options);assert(result.response.ok,`${path}: ${result.response.status} ${JSON.stringify(result.body)}`);return result.body;}
 async function action(payload){return api("/api/v1/deliverability/actions",{method:"POST",body:JSON.stringify(payload)});}
@@ -14,7 +14,7 @@ try{
   const testEmail=`deliverability-test-${runId}@example.com`;const technical=await action({action:"send_test",email:testEmail});
   assert(technical.data.sent&&technical.data.transport==="smtp"&&technical.data.provider_message_id,"La prueba técnica local no devolvió diagnóstico");
   const mailbox=await fetch(`${mailpit}/api/v1/messages`).then(response=>response.json());
-  assert(mailbox.messages?.some(message=>message.To?.some?.(recipient=>recipient.Address===testEmail)||message.Subject?.startsWith("[Serenity Mail] Prueba técnica")),"Mailpit no contiene la prueba técnica");
+  assert(mailbox.messages?.some(message=>message.To?.some?.(recipient=>recipient.Address===testEmail)||message.Subject?.startsWith("[KiroMail] Prueba técnica")),"Mailpit no contiene la prueba técnica");
   const pausedResult=await action({action:"set_sending_paused",paused:true,reason:`E2E ${runId}`});paused=true;assert(pausedResult.dashboard.mode.sending_paused,"La pausa global no quedó activa");
   const blocked=await request("/api/v1/transactional/send",{method:"POST",headers:{"Idempotency-Key":`paused-${runId}`},body:JSON.stringify({to:{email:`paused-${runId}@example.com`},subject:"No debe aceptarse",html:"<p>Pausa activa</p>"})});
   assert(blocked.response.status===503&&blocked.body.error?.code==="sending_paused","La pausa global no bloqueó la aceptación transaccional");

@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" style="width:100vw;height:100vh;display:block">
+  <rect width="1200" height="630" fill="#173f3d"/>
+  <circle cx="1080" cy="40" r="280" fill="#24514e"/>
+  <circle cx="1050" cy="660" r="390" fill="#102f2e"/>
+  <rect x="54" y="54" width="1092" height="522" rx="34" fill="#fffaf1"/>
+  <rect x="94" y="104" width="150" height="150" rx="38" fill="#c96d4f"/>
+  <path fill="#fffaf1" d="M132.7 167.1 128.5 135l28.4 16.7a58.6 58.6 0 0 1 24.3 0l28.4-16.7-4.2 32.1c6.6 8 9.8 17.7 9.8 29.1 0 27-19.4 42.4-46.1 42.4S123 223.2 123 196.2c0-11.3 3.2-21.1 9.7-29.1Z"/>
+  <circle cx="153" cy="188" r="7" fill="#173f3d"/><circle cx="185" cy="188" r="7" fill="#173f3d"/>
+  <path fill="#c96d4f" d="m169 197 8 5.5-8 5.5-8-5.5 8-5.5Z"/>
+  <path d="M169 208v6m0 0c-4 5-9 6-14 4m14-4c4 5 9 6 14 4m-39-12-20-3m21 13-19 5m68-15 20-3m-21 13 19 5" fill="none" stroke="#173f3d" stroke-linecap="round" stroke-width="4"/>
+  <text x="294" y="180" fill="#173f3d" font-family="Georgia, serif" font-size="88" letter-spacing="-3">KiroMail</text>
+  <text x="299" y="228" fill="#a85d45" font-family="Arial, sans-serif" font-size="22" font-weight="700" letter-spacing="4">EMAIL MARKETING AUTOINSTALABLE</text>
+  <line x1="96" y1="310" x2="1104" y2="310" stroke="#ddc8b7" stroke-width="2"/>
+  <text x="96" y="400" fill="#173f3d" font-family="Georgia, serif" font-size="52">Campañas claras.</text>
+  <text x="96" y="465" fill="#c96d4f" font-family="Georgia, serif" font-size="52">Tus datos, en tu terreno.</text>
+  <text x="98" y="526" fill="#617774" font-family="Arial, sans-serif" font-size="22">Newsletters · Transaccionales · Amazon SES · API completa</text>
+</svg>

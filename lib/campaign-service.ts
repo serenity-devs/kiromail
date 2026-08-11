@@ -454,7 +454,7 @@ export async function sendRecipient(recipientId: string) {
       headers: {
         "List-Unsubscribe": `<${headerUnsubscribeUrl}>`,
         "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
-        "X-Serenity-Campaign": row.campaign_id,
+        "X-KiroMail-Campaign": row.campaign_id,
       },
     });
     messageId = response.messageId;
@@ -501,7 +501,7 @@ export async function sendTestEmail(input: { templateId: string; email: string; 
     FROM templates t LEFT JOIN template_versions v ON v.id=t.published_version_id CROSS JOIN settings s WHERE t.id=${input.templateId}
   `;
   if (!row) throw new Error("La plantilla ya no existe");
-  const sample = { first_name: "Prueba", last_name: "Serenity", full_name: "Prueba Serenity", email: input.email, city: "Madrid", country: "España" };
+  const sample = { first_name: "Prueba", last_name: "KiroMail", full_name: "Prueba KiroMail", email: input.email, city: "Madrid", country: "España" };
   const subject = personalize(input.subject, sample);
   const html = personalize(row.html_content, sample);
   const text = personalize(row.text_content, sample) || subject;
@@ -515,7 +515,7 @@ export async function sendTestEmail(input: { templateId: string; email: string; 
       Content: { Simple: { Subject: { Data: `[PRUEBA] ${subject}`, Charset: "UTF-8" }, Body: { Html: { Data: html, Charset: "UTF-8" }, Text: { Data: text, Charset: "UTF-8" } } } },
     }));
   } else {
-    await smtp().sendMail({ from: `${input.fromName} <${input.fromEmail}>`, to: input.email, replyTo: input.replyTo || undefined, subject: `[PRUEBA] ${subject}`, html, text, headers: { "X-Serenity-Test": "true" } });
+    await smtp().sendMail({ from: `${input.fromName} <${input.fromEmail}>`, to: input.email, replyTo: input.replyTo || undefined, subject: `[PRUEBA] ${subject}`, html, text, headers: { "X-KiroMail-Test": "true" } });
   }
   await sql`INSERT INTO audit_log (action, entity_type, entity_id, detail) VALUES ('test_send', 'template', ${input.templateId}, ${sql.json({ email: input.email, transport: selectedTransport })})`;
   return { sent: true };

@@ -23,11 +23,11 @@ COPY --from=builder /app/lib ./lib
 COPY --from=builder /app/worker ./worker
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/db ./db
-COPY docker-entrypoint.sh /usr/local/bin/serenity-entrypoint
-RUN addgroup -S serenity && adduser -S -G serenity serenity \
+COPY docker-entrypoint.sh /usr/local/bin/kiromail-entrypoint
+RUN addgroup -S kiromail && adduser -S -G kiromail kiromail \
   && mkdir -p /app/uploads /app/message-content \
-  && chown serenity:serenity /app/uploads /app/message-content \
-  && chmod 0755 /usr/local/bin/serenity-entrypoint
-ENTRYPOINT ["/usr/local/bin/serenity-entrypoint"]
+  && chown kiromail:kiromail /app/uploads /app/message-content \
+  && chmod 0755 /usr/local/bin/kiromail-entrypoint
+ENTRYPOINT ["/usr/local/bin/kiromail-entrypoint"]
 EXPOSE 3000
 CMD ["npm", "start"]

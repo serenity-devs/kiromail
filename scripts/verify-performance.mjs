@@ -27,7 +27,7 @@ try{
   await sql`INSERT INTO subscriptions(contact_id,list_id,status,source,custom_values,subscribed_at,confirmed_at,consent_text)SELECT id,${listId},'active','load_e2e','{}',now(),now(),'Prueba local de rendimiento' FROM contacts WHERE source=${`load_e2e_${marker}`}`;
   const bearer={Authorization:`Bearer ${token}`};
 
-  const login=await fetch(`${base}/api/auth/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:process.env.ADMIN_EMAIL??"admin@serenity.local",password:process.env.ADMIN_PASSWORD??"serenity-local-2026"})});assert.equal(login.status,200,"Login de carga fallido");cookie=login.headers.get("set-cookie")?.split(";")[0]??"";
+  const login=await fetch(`${base}/api/auth/login`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:process.env.ADMIN_EMAIL??"admin@kiromail.local",password:process.env.ADMIN_PASSWORD??"kiromail-local-2026"})});assert.equal(login.status,200,"Login de carga fallido");cookie=login.headers.get("set-cookie")?.split(";")[0]??"";
 
   await benchmark("contact_list_100k",50,10,()=>fetchMeasured("/api/v1/contacts?limit=50",{headers:bearer}),500);
   await benchmark("subscription_list_100k",50,10,()=>fetchMeasured(`/api/v1/lists/${listId}/subscriptions?limit=50`,{headers:bearer}),500);

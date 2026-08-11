@@ -14,9 +14,9 @@ export async function POST(request: Request) {
     if (reset) {
       const url = `${env.appUrl.replace(/\/$/, "")}/reset-password/${encodeURIComponent(reset.token)}`;
       await acceptTransactionalMessage({
-        to: { email: reset.user.email, name: reset.user.name }, subject: "Restablece tu contraseña de Serenity Mail",
+        to: { email: reset.user.email, name: reset.user.name }, subject: "Restablece tu contraseña de KiroMail",
         html: `<div style="max-width:620px;margin:0 auto;padding:36px;font-family:Arial,sans-serif;color:#17282a"><h1 style="font-family:Georgia,serif;font-weight:500">Restablece tu contraseña</h1><p>Hola ${escapeHtml(reset.user.name)},</p><p>Este enlace es válido durante una hora y solo puede utilizarse una vez.</p><p><a href="${url}" style="display:inline-block;padding:13px 20px;border-radius:5px;background:#183e3f;color:white;text-decoration:none">Crear nueva contraseña</a></p><p style="color:#737b78;font-size:12px">Si no lo solicitaste, puedes ignorar este mensaje.</p></div>`,
-        text: `Restablece tu contraseña de Serenity Mail: ${url}`, metadata: { kind: "password_reset", reset_id: reset.id }, track_opens: false, track_clicks: false,
+        text: `Restablece tu contraseña de KiroMail: ${url}`, metadata: { kind: "password_reset", reset_id: reset.id }, track_opens: false, track_clicks: false,
       }, `password-reset:${reset.id}`, { id: "password-reset", kind: "system" });
     }
   } catch (error) {

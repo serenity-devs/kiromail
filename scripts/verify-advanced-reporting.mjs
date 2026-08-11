@@ -16,17 +16,17 @@ try{
   const[segment]=await sql`INSERT INTO segments(name,description,list_id,status,definition)VALUES(${`Segmento informes ${marker}`},'Snapshot E2E',${listId},'active','{"kind":"group","match":"all","children":[]}'::jsonb)RETURNING id`;segmentId=segment.id;
   const[current]=await sql`
     INSERT INTO campaigns(name,subject,from_name,from_email,reply_to,html_content,text_content,content_source,target_type,target_id,list_id,status,started_at,completed_at,total_recipients,sent_count,delivered_count,open_count,click_count)
-    VALUES(${`Campaña actual ${marker}`},'Actual','Serenity','reports@serenity.local','reports@serenity.local','<p>Actual</p>','Actual','direct','segment',${segmentId},${listId},'completed',now()-interval '1 day',now()-interval '23 hours',20,20,20,20,10) RETURNING id
+    VALUES(${`Campaña actual ${marker}`},'Actual','KiroMail','reports@kiromail.local','reports@kiromail.local','<p>Actual</p>','Actual','direct','segment',${segmentId},${listId},'completed',now()-interval '1 day',now()-interval '23 hours',20,20,20,20,10) RETURNING id
   `;currentCampaignId=current.id;
   const[previous]=await sql`
     INSERT INTO campaigns(name,subject,from_name,from_email,reply_to,html_content,text_content,content_source,target_type,list_id,status,started_at,completed_at,total_recipients,sent_count,delivered_count,open_count,click_count)
-    VALUES(${`Campaña anterior ${marker}`},'Anterior','Serenity','reports@serenity.local','reports@serenity.local','<p>Anterior</p>','Anterior','direct','list',${listId},'completed',now()-interval '40 days',now()-interval '39 days',10,10,10,5,2) RETURNING id
+    VALUES(${`Campaña anterior ${marker}`},'Anterior','KiroMail','reports@kiromail.local','reports@kiromail.local','<p>Anterior</p>','Anterior','direct','list',${listId},'completed',now()-interval '40 days',now()-interval '39 days',10,10,10,5,2) RETURNING id
   `;previousCampaignId=previous.id;
 
   for(let index=0;index<20;index+=1){
     const team=index<8?"Norte":index<16?"Sur":"Oculto";const opened=true,clicked=index<10;const email=`report-${marker}-${index}@example.test`;
     const[recipient]=await sql`INSERT INTO campaign_recipients(campaign_id,email,status,personalization,sent_at,delivered_at,opened_at,clicked_at,open_count,click_count)VALUES(${currentCampaignId},${email},'delivered',${sql.json({equipo:team})},now()-interval '1 day',now()-interval '1 day',${opened?new Date():null},${clicked?new Date():null},1,${clicked?1:0})RETURNING id`;
-    const[message]=await sql`INSERT INTO outbound_messages(kind,campaign_id,campaign_recipient_id,to_email,from_email,from_name,reply_to,subject,status,sent_at,delivered_at)VALUES('campaign',${currentCampaignId},${recipient.id},${email},'reports@serenity.local','Serenity','reports@serenity.local','Actual','delivered',now()-interval '1 day',now()-interval '1 day')RETURNING id`;
+    const[message]=await sql`INSERT INTO outbound_messages(kind,campaign_id,campaign_recipient_id,to_email,from_email,from_name,reply_to,subject,status,sent_at,delivered_at)VALUES('campaign',${currentCampaignId},${recipient.id},${email},'reports@kiromail.local','KiroMail','reports@kiromail.local','Actual','delivered',now()-interval '1 day',now()-interval '1 day')RETURNING id`;
     await sql`UPDATE campaign_recipients SET outbound_message_id=${message.id} WHERE id=${recipient.id}`;
     const userAgent=index<15?"Microsoft Outlook Windows NT 10.0":"AppleMail/16.0 Macintosh";
     await sql`INSERT INTO email_events(event_key,message_id,recipient_id,campaign_id,type,source,payload,is_automated,occurred_at)VALUES(${`reports:${runId}:open:${index}`},${message.id},${recipient.id},${currentCampaignId},'opened','e2e',${sql.json({user_agent:userAgent})},false,now()-interval '23 hours')`;

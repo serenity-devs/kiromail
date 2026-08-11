@@ -5,7 +5,7 @@ import { assertMimeWithinLimit, buildTransactionalMime } from "../lib/transactio
 const base = {
   messageId: "11111111-1111-4111-8111-111111111111",
   acceptedAt: new Date("2026-08-04T12:00:00.000Z"),
-  from: { email: "news@example.com", name: "Serenity" },
+  from: { email: "news@example.com", name: "KiroMail" },
   to: { email: "ana@example.net", name: "Ana" },
   replyTo: "reply@example.com",
   subject: "Informe de agosto",
@@ -20,8 +20,8 @@ test("transactional MIME contains headers, alternatives and encoded attachment",
     attachments: [{ filename: "informe.txt", content: attachment, contentType: "text/plain", disposition: "attachment" }],
   });
   const source = mime.toString("utf8");
-  assert.match(source, /Message-ID: <11111111-1111-4111-8111-111111111111@serenity-mail\.local>/i);
-  assert.match(source, /X-Serenity-Channel: transactional/i);
+  assert.match(source, /Message-ID: <11111111-1111-4111-8111-111111111111@kiromail\.local>/i);
+  assert.match(source, /X-KiroMail-Channel: transactional/i);
   assert.match(source, /multipart\/mixed/i);
   assert.match(source, /multipart\/alternative/i);
   assert.match(source, /filename=informe\.txt/i);

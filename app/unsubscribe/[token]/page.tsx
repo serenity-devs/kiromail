@@ -10,7 +10,7 @@ export default async function UnsubscribePage({ params }: { params: Promise<{ to
   return (
     <main className="public-page">
       <section className="public-card">
-        <div className="brand-mark brand-mark-large">S</div>
+        <div className="brand-mark brand-mark-large" aria-hidden="true" />
         <p className="eyebrow">Preferencias de correo</p>
         <h1>{valid ? "¿Quieres dejar de recibir esta lista?" : "Este enlace ya no es válido"}</h1>
         <p>{valid ? modern?`Daremos de baja ${modern.email} únicamente de «${modern.list_name}». Las demás suscripciones seguirán como están.`:`Daremos de baja ${legacy!.email} de la lista asociada a esta campaña.` : "El enlace puede estar incompleto, haber caducado o haber sido revocado."}</p>

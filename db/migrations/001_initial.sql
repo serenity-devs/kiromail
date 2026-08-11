@@ -150,10 +150,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS suppressions_email_lower_unique ON suppression
 
 CREATE TABLE IF NOT EXISTS settings (
   id integer PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-  organization_name text NOT NULL DEFAULT 'Serenity Studio',
-  default_from_name text NOT NULL DEFAULT 'Serenity Studio',
-  default_from_email text NOT NULL DEFAULT 'hola@serenity.local',
-  default_reply_to text NOT NULL DEFAULT 'hola@serenity.local',
+  organization_name text NOT NULL DEFAULT 'KiroMail Studio',
+  default_from_name text NOT NULL DEFAULT 'KiroMail Studio',
+  default_from_email text NOT NULL DEFAULT 'hola@kiromail.local',
+  default_reply_to text NOT NULL DEFAULT 'hola@kiromail.local',
   aws_region text NOT NULL DEFAULT 'eu-west-1',
   ses_configuration_set text NOT NULL DEFAULT '',
   mail_transport text NOT NULL DEFAULT 'smtp' CHECK (mail_transport IN ('smtp', 'ses')),

@@ -1,9 +1,9 @@
 #!/bin/sh
 set -eu
 
-if [ "${CONFIRM_RESTORE:-}" != "RESTORE_SERENITY_MAIL" ]; then echo "Define CONFIRM_RESTORE=RESTORE_SERENITY_MAIL para confirmar" >&2; exit 1; fi
+if [ "${CONFIRM_RESTORE:-}" != "RESTORE_KIROMAIL" ]; then echo "Define CONFIRM_RESTORE=RESTORE_KIROMAIL para confirmar" >&2; exit 1; fi
 archive=${1:-}
-case "$archive" in /backups/serenity-*.tar.gz.enc) ;; *) echo "Indica un backup dentro de /backups" >&2; exit 1;; esac
+case "$archive" in /backups/kiromail-*.tar.gz.enc) ;; *) echo "Indica un backup dentro de /backups" >&2; exit 1;; esac
 if [ ! -f "$archive" ]; then echo "El backup no existe" >&2; exit 1; fi
 if [ -f "$archive.sha256" ]; then (cd /backups && sha256sum -c "$(basename "$archive.sha256")"); fi
 

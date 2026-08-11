@@ -1,6 +1,34 @@
-# Serenity Mail
+<p align="center">
+  <img src="public/kiro-cat.svg" width="104" height="104" alt="Kiro, el gato de KiroMail">
+</p>
 
-Aplicación autoinstalable para gestionar suscriptores, crear segmentos y plantillas, enviar newsletters y analizar resultados. Está preparada para Amazon SES y utiliza Mailpit como buzón seguro durante el desarrollo local.
+<h1 align="center">KiroMail</h1>
+
+<p align="center">
+  Email marketing autoinstalable para newsletters y mensajes transaccionales.<br>
+  Tus contactos, tus plantillas, tus datos y tu infraestructura.
+</p>
+
+KiroMail permite gestionar audiencias con campos personalizados, diseñar y versionar plantillas, enviar campañas o emails transaccionales y analizar todo el ciclo de entrega. Usa Amazon SES en producción y Mailpit como buzón seguro durante el desarrollo local. El nombre y el icono están inspirados en Kiro, el gato que acompaña el proyecto.
+
+> **Estado:** `1.0.0-rc.2`. La aplicación está funcionalmente completa y preparada para instalarse en un servidor; la validación final debe repetirse con el dominio, DNS y cuenta SES reales de cada instalación.
+
+## Qué incluye
+
+- Contactos de newsletter, listas independientes, campos propios y consentimiento trazable.
+- Importación y exportación CSV, segmentos tipados y centro público de preferencias.
+- Campañas programadas, pruebas A/B, pausa, reanudación y snapshot de audiencia.
+- Plantillas HTML versionadas y editor visual práctico en pantalla completa.
+- Email transaccional individual o batch mediante plantilla o HTML directo.
+- API REST documentada con OpenAPI, claves con scopes, idempotencia y webhooks firmados.
+- Eventos de envío, entrega, apertura, clic, rebote, queja y baja.
+- Amazon SES, SNS, Mailpit, PostgreSQL, Redis/BullMQ, almacenamiento local o S3.
+- Usuarios con roles, sesiones revocables, TOTP, auditoría, métricas y operaciones.
+- Docker Compose, HTTPS con Caddy, secretos, backups cifrados y rollback documentado.
+
+## Arquitectura
+
+KiroMail está construido con Next.js 16, React 19, PostgreSQL 17, Redis y BullMQ. La aplicación web y los workers comparten el mismo modelo de datos; Amazon SES o SMTP actúan únicamente como transporte. El HTML exacto enviado y sus eventos quedan disponibles para auditoría según la política de retención configurada.
 
 ## Arranque local
 
@@ -14,8 +42,8 @@ Cuando todos los servicios estén saludables:
 
 - Aplicación: http://localhost:3100
 - Buzón de pruebas Mailpit: http://localhost:8026
-- Usuario: `admin@serenity.local`
-- Contraseña: `serenity-local-2026`
+- Usuario: `admin@kiromail.local`
+- Contraseña: `kiromail-local-2026`
 
 El primer arranque crea el esquema y carga datos de demostración. Los volúmenes de PostgreSQL, Redis, Mailpit, activos y contenido exacto sobreviven a los reinicios.
 
@@ -89,20 +117,20 @@ El perfil `ops` genera cada día una copia cifrada AES-256 de PostgreSQL, activo
 
 ```bash
 ./scripts/prod-compose.sh --profile ops up -d backup
-./scripts/prod-compose.sh --profile ops run --rm backup /opt/serenity/backup.sh
+./scripts/prod-compose.sh --profile ops run --rm backup /opt/kiromail/backup.sh
 ```
 
-Comprueba una copia restaurándola de verdad en la base aislada y fija `serenity_restore_test`:
+Comprueba una copia restaurándola de verdad en la base aislada y fija `kiromail_restore_test`:
 
 ```bash
-./scripts/prod-compose.sh --profile ops run --rm backup /opt/serenity/restore-test.sh /backups/serenity-AAAAMMDDTHHMMSSZ.tar.gz.enc
+./scripts/prod-compose.sh --profile ops run --rm backup /opt/kiromail/restore-test.sh /backups/kiromail-AAAAMMDDTHHMMSSZ.tar.gz.enc
 ```
 
 La restauración completa exige una confirmación literal. Detén primero app y worker, conserva una copia del estado actual y después ejecuta:
 
 ```bash
 ./scripts/prod-compose.sh stop app worker
-./scripts/prod-compose.sh --profile ops run --rm -e CONFIRM_RESTORE=RESTORE_SERENITY_MAIL backup /opt/serenity/restore.sh /backups/serenity-AAAAMMDDTHHMMSSZ.tar.gz.enc
+./scripts/prod-compose.sh --profile ops run --rm -e CONFIRM_RESTORE=RESTORE_KIROMAIL backup /opt/kiromail/restore.sh /backups/kiromail-AAAAMMDDTHHMMSSZ.tar.gz.enc
 ./scripts/prod-compose.sh up -d app worker
 ```
 
@@ -112,11 +140,11 @@ Tras desplegar o actualizar, ejecuta `./scripts/prod-compose.sh exec -T -e VERIF
 
 ## Actualización y rollback
 
-Antes de actualizar, guarda el identificador de la versión en uso y crea una copia cifrada verificable. El ensayo automatizado construye dos bases temporales, aplica todas las migraciones salvo la última, introduce datos centinela, actualiza, comprueba que una aplicación anterior todavía puede leer y escribir y restaura el snapshot previo. No modifica `serenity_mail`:
+Antes de actualizar, guarda el identificador de la versión en uso y crea una copia cifrada verificable. El ensayo automatizado construye dos bases temporales, aplica todas las migraciones salvo la última, introduce datos centinela, actualiza, comprueba que una aplicación anterior todavía puede leer y escribir y restaura el snapshot previo. No modifica `kiromail`:
 
 ```bash
 npm run verify:upgrade
-./scripts/prod-compose.sh --profile ops run --rm backup /opt/serenity/backup.sh
+./scripts/prod-compose.sh --profile ops run --rm backup /opt/kiromail/backup.sh
 ```
 
 Despliega con parada ordenada del worker, migración separada y readiness antes de volver a enviar:
@@ -154,3 +182,21 @@ npm run build
 npm run verify:bootstrap
 npm run verify:upgrade
 ```
+
+## Documentación
+
+- [Especificación funcional completa](docs/especificacion-funcional.md)
+- [Instalación y operación en producción](docs/produccion.md)
+- Referencia OpenAPI integrada en `/api-docs` después de iniciar la aplicación
+
+## Seguridad
+
+No publiques vulnerabilidades en una issue. Usa la opción **Report a vulnerability** de GitHub para abrir un aviso privado con pasos de reproducción, impacto y versión afectada.
+
+## Contribuciones
+
+Las propuestas y correcciones son bienvenidas mediante issues y pull requests. Antes de enviar cambios, ejecuta `npm test`, `npm run lint` y `npm run build`.
+
+## Licencia
+
+El repositorio es público, pero todavía no se ha elegido una licencia de código abierto. Hasta que se añada un archivo `LICENSE`, se reservan todos los derechos sobre el código.

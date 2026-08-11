@@ -27,7 +27,7 @@ case "$retention_days" in *[!0-9]*|'') echo "BACKUP_RETENTION_DAYS debe ser un e
 
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
 temporary=$(mktemp -d)
-archive="$backup_dir/serenity-$timestamp.tar.gz.enc"
+archive="$backup_dir/kiromail-$timestamp.tar.gz.enc"
 run_id=$(psql "$database_url" -v ON_ERROR_STOP=1 -qAtc "INSERT INTO operational_runs(type,status,instance_id,started_at) VALUES('backup','running','backup',now()) RETURNING id")
 case "$run_id" in
   ????????-????-????-????-????????????) ;;
@@ -67,5 +67,5 @@ SET status='completed',
     completed_at=now()
 WHERE id=:'run_id';
 SQL
-find "$backup_dir" -maxdepth 1 -type f \( -name 'serenity-*.tar.gz.enc' -o -name 'serenity-*.tar.gz.enc.sha256' \) -mtime "+$retention_days" -delete
+find "$backup_dir" -maxdepth 1 -type f \( -name 'kiromail-*.tar.gz.enc' -o -name 'kiromail-*.tar.gz.enc.sha256' \) -mtime "+$retention_days" -delete
 echo "Backup cifrado creado: $archive ($bytes bytes)"

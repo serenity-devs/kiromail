@@ -18,7 +18,7 @@ let transactionalQueue: Queue | undefined;
 let dataQueue: Queue | undefined;
 
 export function getEmailQueue() {
-  queue ??= new Queue("serenity-email", {
+  queue ??= new Queue("kiromail-email", {
     connection: redisConnection,
     defaultJobOptions: {
       attempts: 4,
@@ -31,7 +31,7 @@ export function getEmailQueue() {
 }
 
 export function getTransactionalQueue() {
-  transactionalQueue ??= new Queue("serenity-transactional", {
+  transactionalQueue ??= new Queue("kiromail-transactional", {
     connection: redisConnection,
     defaultJobOptions: {
       attempts: 5,
@@ -44,7 +44,7 @@ export function getTransactionalQueue() {
 }
 
 export function getDataQueue() {
-  dataQueue ??= new Queue("serenity-data", {
+  dataQueue ??= new Queue("kiromail-data", {
     connection: redisConnection,
     defaultJobOptions: { attempts: 2, backoff: { type: "exponential", delay: 3000 }, removeOnComplete: 200, removeOnFail: 1000 },
   });

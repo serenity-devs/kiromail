@@ -78,10 +78,10 @@ const userId = pathParameter("id", "UUID del usuario");
 export const openApiDocument = {
   openapi: "3.1.0",
   info: {
-    title: "Serenity Mail API",
+    title: "KiroMail API",
     version: "1.0.0",
     description: "API REST para audiencias, plantillas, campañas, mensajes transaccionales, trabajos de datos y webhooks. Las bajas por lista nunca se revierten de forma implícita.",
-    contact: { name: "Administrador de Serenity Mail" },
+    contact: { name: "Administrador de KiroMail" },
   },
   jsonSchemaDialect: "https://json-schema.org/draft/2020-12/schema",
   servers: [{ url: "/", description: "Esta instalación" }],
@@ -383,8 +383,8 @@ export const openApiDocument = {
   },
   components: {
     securitySchemes: {
-      bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "serenity_api_key", description: "Clave creada en Ajustes → Integraciones y API." },
-      sessionCookie: { type: "apiKey", in: "cookie", name: "serenity_session", description: "Sesión administrativa del navegador." },
+      bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "km_live", description: "Clave creada en Ajustes → Integraciones y API." },
+      sessionCookie: { type: "apiKey", in: "cookie", name: "kiromail_session", description: "Sesión administrativa del navegador." },
     },
     schemas: {
       ErrorResponse: { type: "object", required: ["error"], properties: { error: { type: "object", required: ["code", "message"], properties: { code: { type: "string", example: "validation_error" }, message: { type: "string" }, field: { type: ["string", "null"] }, issues: { type: "array", items: { type: "object", additionalProperties: true } } } }, request_id: { type: ["string", "null"] } } },
@@ -409,7 +409,7 @@ export const openApiDocument = {
         {type:"object",required:["action","reason"],properties:{action:{const:"anonymize"},reason:{type:"string",minLength:1,maxLength:500}}},
         {type:"object",required:["action","survivor_contact_id","reason"],properties:{action:{const:"merge"},survivor_contact_id:{type:"string",format:"uuid"},field_strategy:{type:"string",enum:["target","source","fill_empty"],default:"fill_empty"},reason:{type:"string",minLength:1,maxLength:500}}},
       ] },
-      ContactPrivacyExport:{type:"object",properties:{export:{type:"object",properties:{request_id:{type:"string",format:"uuid"},generated_at:{type:"string",format:"date-time"},format:{const:"serenity-mail-contact-v1"}}},contact:ref("Contact"),subscriptions:{type:"array",items:ref("Subscription")},consent_events:{type:"array",items:{type:"object",additionalProperties:true}},tags:{type:"array",items:{type:"object",additionalProperties:true}},outbound_messages:{type:"array",items:{type:"object",additionalProperties:true}},campaign_recipients:{type:"array",items:{type:"object",additionalProperties:true}},suppressions:{type:"array",items:ref("Suppression")},privacy_requests:{type:"array",items:{type:"object",additionalProperties:true}},merges:{type:"array",items:{type:"object",additionalProperties:true}}}},
+      ContactPrivacyExport:{type:"object",properties:{export:{type:"object",properties:{request_id:{type:"string",format:"uuid"},generated_at:{type:"string",format:"date-time"},format:{const:"kiromail-contact-v1"}}},contact:ref("Contact"),subscriptions:{type:"array",items:ref("Subscription")},consent_events:{type:"array",items:{type:"object",additionalProperties:true}},tags:{type:"array",items:{type:"object",additionalProperties:true}},outbound_messages:{type:"array",items:{type:"object",additionalProperties:true}},campaign_recipients:{type:"array",items:{type:"object",additionalProperties:true}},suppressions:{type:"array",items:ref("Suppression")},privacy_requests:{type:"array",items:{type:"object",additionalProperties:true}},merges:{type:"array",items:{type:"object",additionalProperties:true}}}},
       BulkContactsCreate: { type: "object", required: ["contact_ids", "action"], properties: { contact_ids: { type: "array", minItems: 1, maxItems: 10000, uniqueItems: true, items: { type: "string", format: "uuid" } }, action: { type: "string", enum: ["subscribe", "unsubscribe", "archive", "block"] }, list_id: { type: "string", format: "uuid", description: "Obligatorio salvo para block." }, reactivate: { type: "boolean", default: false }, reason: { type: "string", maxLength: 1000 } } },
       SuppressionCreate: { type: "object", required: ["email"], properties: { email: { type: "string", format: "email" }, reason: { type: "string", enum: ["unsubscribe", "bounce", "complaint", "manual"], default: "manual" }, scope: { type: "string", enum: ["marketing", "transactional", "all"], default: "all" }, note: { type: "string", maxLength: 1000 } } },
       SuppressionAction: { type: "object", required: ["action"], properties: { action: { type: "string", enum: ["resolve", "reactivate"] }, note: { type: "string", maxLength: 1000 } } },
