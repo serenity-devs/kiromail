@@ -43,6 +43,10 @@ test("shared-server deployment never binds public ports or builds on the VPS", (
   assert.doesNotMatch(serverCompose, /^\s+build:/m);
   assert.match(serverCompose, /name: \$\{PUBLIC_PROXY_NETWORK:-valuebets_web\}/);
   assert.match(serverCompose, /aliases: \[kiromail-app\]/);
+  assert.match(serverCompose, /\n  kiromail-app:\n/);
+  assert.doesNotMatch(serverCompose, /\n  app:\n/);
+  assert.match(deployScript, /app_service=kiromail-app/);
+  assert.match(deployScript, /legacy_service" != app/);
   assert.match(serverCompose, /internal: true/);
 });
 

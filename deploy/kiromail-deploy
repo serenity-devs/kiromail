@@ -15,6 +15,7 @@ lock_file=/run/lock/kiromail-deploy.lock
 registry=ghcr.io/serenity-devs
 app_image="$registry/kiromail:$release"
 backup_image="$registry/kiromail-backup:$release"
+app_service=kiromail-app
 candidate_release=$(mktemp "$app_dir/.release.env.XXXXXX")
 
 cleanup() {
@@ -49,7 +50,7 @@ candidate_compose=(docker compose --env-file "$app_dir/.env" --env-file "$candid
 "${candidate_compose[@]}" config --quiet
 
 had_previous=false
-if [[ -s "$current_release" ]] && "${candidate_compose[@]}" ps -q app | grep -q .; then
+if [[ -s "$current_release" ]] && "${candidate_compose[@]}" ps -q worker | grep -q .; then
   had_previous=true
   current_compose=(docker compose --env-file "$app_dir/.env" --env-file "$current_release" -f "$compose_file")
   echo "Creating an encrypted backup before migration"
@@ -62,11 +63,11 @@ rollback() {
   local status=$?
   trap - ERR
   echo "Deployment failed with status $status." >&2
-  "${candidate_compose[@]}" logs --no-color --tail=120 app worker migrate >&2 || true
+  "${candidate_compose[@]}" logs --no-color --tail=120 "$app_service" worker migrate >&2 || true
   if [[ "$had_previous" == true ]]; then
     echo "Restoring the previous application images." >&2
     current_compose=(docker compose --env-file "$app_dir/.env" --env-file "$current_release" -f "$compose_file")
-    "${current_compose[@]}" up -d --no-build app worker backup || true
+    "${current_compose[@]}" up -d --no-build "$app_service" worker backup || true
   fi
   exit "$status"
 }
@@ -79,9 +80,9 @@ echo "Applying additive database migrations"
 "${candidate_compose[@]}" --profile migration run --rm migrate
 
 echo "Starting KiroMail $release"
-"${candidate_compose[@]}" up -d --no-build app worker
+"${candidate_compose[@]}" up -d --no-build "$app_service" worker
 
-app_container=$("${candidate_compose[@]}" ps -q app)
+app_container=$("${candidate_compose[@]}" ps -q "$app_service")
 if [[ -z "$app_container" ]]; then
   echo "The app container was not created." >&2
   false
@@ -102,6 +103,19 @@ for attempt in {1..30}; do
   fi
   sleep 4
 done
+
+legacy_app_container=kiromail-app-1
+if docker container inspect "$legacy_app_container" >/dev/null 2>&1; then
+  legacy_project=$(docker container inspect --format '{{index .Config.Labels "com.docker.compose.project"}}' "$legacy_app_container")
+  legacy_service=$(docker container inspect --format '{{index .Config.Labels "com.docker.compose.service"}}' "$legacy_app_container")
+  if [[ "$legacy_project" != kiromail || "$legacy_service" != app ]]; then
+    echo "Refusing to remove unexpected container $legacy_app_container." >&2
+    false
+  fi
+  echo "Removing the verified legacy app service name"
+  docker stop --time 30 "$legacy_app_container"
+  docker rm "$legacy_app_container"
+fi
 
 echo "Starting encrypted daily backups"
 "${candidate_compose[@]}" up -d --no-build backup

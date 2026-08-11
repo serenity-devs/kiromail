@@ -104,7 +104,7 @@ services:
     security_opt: [no-new-privileges:true]
     logging: *default-logging
 
-  app:
+  kiromail-app:
     image: ${KIROMAIL_IMAGE:?Define KIROMAIL_IMAGE}
     restart: unless-stopped
     init: true
