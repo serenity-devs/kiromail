@@ -52,6 +52,11 @@ test("theme selection is persisted and exposed in the complete settings page", (
   assert.match(settingsView, /label: "Apariencia"/);
   assert.match(settingsView, /role="radiogroup"/);
   assert.match(settingsView, /name="ui_theme"/);
+  assert.equal(
+    settingsView.match(/min="0\.0001" max="100" step="0\.0001"/g)?.length,
+    3,
+    "valid percentage defaults must not block the complete settings form",
+  );
 });
 
 test("operations panels have scoped responsive padding", () => {

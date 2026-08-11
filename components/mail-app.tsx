@@ -7930,15 +7930,15 @@ function SettingsView({ data, refresh, notify }: ViewProps) {
                   </label>
                   <label>
                     Alerta de rebote (%)
-                    <input type="number" min="0.0001" max="100" step="0.01" name="bounce_alert_threshold" defaultValue={Number(data.settings.bounce_alert_threshold) * 100} />
+                    <input type="number" min="0.0001" max="100" step="0.0001" name="bounce_alert_threshold" defaultValue={Number(data.settings.bounce_alert_threshold) * 100} />
                   </label>
                   <label>
                     Alerta de queja (%)
-                    <input type="number" min="0.0001" max="100" step="0.01" name="complaint_alert_threshold" defaultValue={Number(data.settings.complaint_alert_threshold) * 100} />
+                    <input type="number" min="0.0001" max="100" step="0.0001" name="complaint_alert_threshold" defaultValue={Number(data.settings.complaint_alert_threshold) * 100} />
                   </label>
                   <label>
                     Alerta de retraso (%)
-                    <input type="number" min="0.0001" max="100" step="0.01" name="delay_alert_threshold" defaultValue={Number(data.settings.delay_alert_threshold) * 100} />
+                    <input type="number" min="0.0001" max="100" step="0.0001" name="delay_alert_threshold" defaultValue={Number(data.settings.delay_alert_threshold) * 100} />
                   </label>
                   <label>
                     Modo de conciliación
