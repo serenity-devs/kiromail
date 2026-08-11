@@ -250,8 +250,9 @@ puede activar `Deploy production`; un pull request de un fork no obtiene el
 token con escritura ni acceso al VPS. GitHub etiqueta las imágenes con el SHA
 de 40 caracteres. El timer comprueba una nueva versión cada tres minutos; el
 servidor crea una copia cifrada antes de migrar, detiene el worker ordenadamente
-y espera el readiness de la nueva app. Si falla, vuelve a levantar las imágenes
-anotadas en `release.env`.
+y espera el liveness de la nueva app. Si falla, vuelve a levantar las imágenes
+anotadas en `release.env`. El readiness operativo se supervisa por separado y
+permanece cerrado mientras falte configuración obligatoria de la instalación.
 
 ### 11.3 Operación y límites del host
 
