@@ -6,6 +6,12 @@ import { useRouter } from "next/navigation";
 import { apiRequest } from "@/lib/client-api";
 import { suggestEmailCorrection } from "@/lib/email-quality";
 import {
+  defaultUiTheme,
+  normalizeUiTheme,
+  uiThemes,
+  type UiThemeId,
+} from "@/lib/ui-themes";
+import {
   Activity,
   ArrowRight,
   BarChart3,
@@ -32,6 +38,7 @@ import {
   Monitor,
   MousePointerClick,
   Paperclip,
+  Palette,
   Pencil,
   Plus,
   RefreshCw,
@@ -655,6 +662,7 @@ type Suppression = {
 };
 type SettingsData = {
   organization_name: string;
+  ui_theme: UiThemeId;
   default_from_name: string;
   default_from_email: string;
   default_reply_to: string;
@@ -985,6 +993,12 @@ export function MailApp() {
     // The initial load intentionally runs once; subsequent refreshes are action-driven.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  useEffect(() => {
+    if (!data) return;
+    const theme = normalizeUiTheme(data.settings.ui_theme);
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("kiromail-theme", theme);
+  }, [data]);
   function notify(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 3200);
@@ -7432,6 +7446,7 @@ function SettingsView({ data, refresh, notify }: ViewProps) {
   const [dirty, setDirty] = useState(false);
   const [activeTab, setActiveTab] = useState<
     | "general"
+    | "appearance"
     | "sending"
     | "tracking"
     | "storage"
@@ -7445,8 +7460,19 @@ function SettingsView({ data, refresh, notify }: ViewProps) {
   const [contentStorage, setContentStorage] = useState(
     data.settings.content_storage,
   );
+  const [uiTheme, setUiTheme] = useState<UiThemeId>(
+    normalizeUiTheme(data.settings.ui_theme),
+  );
+  useEffect(() => {
+    return () => {
+      document.documentElement.dataset.theme = normalizeUiTheme(
+        data.settings.ui_theme,
+      );
+    };
+  }, [data.settings.ui_theme]);
   const settingsTabs = [
     { id: "general", label: "General", icon: Settings },
+    { id: "appearance", label: "Apariencia", icon: Palette },
     { id: "sending", label: "Envío y SES", icon: Send },
     { id: "tracking", label: "Seguimiento", icon: Activity },
     { id: "storage", label: "Almacenamiento", icon: Layers3 },
@@ -7456,6 +7482,7 @@ function SettingsView({ data, refresh, notify }: ViewProps) {
   ] as const;
   const configurableTabs = new Set([
     "general",
+    "appearance",
     "sending",
     "tracking",
     "storage",
@@ -7490,6 +7517,7 @@ function SettingsView({ data, refresh, notify }: ViewProps) {
     const form = new FormData(event.currentTarget);
     const payload = {
       organization_name: form.get("organization_name"),
+      ui_theme: form.get("ui_theme"),
       default_from_name: form.get("default_from_name"),
       default_from_email: form.get("default_from_email"),
       default_reply_to: form.get("default_reply_to"),
@@ -7656,6 +7684,107 @@ function SettingsView({ data, refresh, notify }: ViewProps) {
                       {item.label}
                     </span>
                   ))}
+                </div>
+              </section>
+            </div>
+
+            <div
+              id="settings-panel-appearance"
+              role="tabpanel"
+              hidden={activeTab !== "appearance"}
+              className="settings-tab-panel"
+            >
+              <section className="panel settings-section appearance-settings">
+                <div className="settings-section-head">
+                  <span className="metric-icon violet">
+                    <Palette size={18} />
+                  </span>
+                  <div>
+                    <h3>Tema de la aplicación</h3>
+                    <p>
+                      Cambia la paleta y la personalidad tipográfica de todo el
+                      espacio de trabajo.
+                    </p>
+                  </div>
+                  <span className="status-badge success">5 temas</span>
+                </div>
+                <input type="hidden" name="ui_theme" value={uiTheme} />
+                <div
+                  className="theme-grid"
+                  role="radiogroup"
+                  aria-label="Tema de la aplicación"
+                >
+                  {uiThemes.map((theme) => {
+                    const selected = uiTheme === theme.id;
+                    return (
+                      <button
+                        key={theme.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        className={`theme-card theme-card-${theme.id} ${selected ? "selected" : ""}`}
+                        style={
+                          {
+                            "--theme-primary": theme.colors[0],
+                            "--theme-accent": theme.colors[1],
+                            "--theme-canvas": theme.colors[2],
+                            "--theme-surface": theme.colors[3],
+                          } as React.CSSProperties
+                        }
+                        onClick={() => {
+                          setUiTheme(theme.id);
+                          document.documentElement.dataset.theme = theme.id;
+                          setDirty(true);
+                        }}
+                      >
+                        <span className="theme-card-topline">
+                          <span>
+                            <strong>{theme.name}</strong>
+                            {theme.id === defaultUiTheme && (
+                              <small>Predeterminado</small>
+                            )}
+                          </span>
+                          <span
+                            className={`theme-selected-mark ${selected ? "visible" : ""}`}
+                            aria-hidden="true"
+                          >
+                            <Check size={13} />
+                          </span>
+                        </span>
+                        <span className="theme-card-preview" aria-hidden="true">
+                          <i />
+                          <span>
+                            <b />
+                            <b />
+                            <b />
+                          </span>
+                        </span>
+                        <span className="theme-card-palette" aria-hidden="true">
+                          {theme.colors.map((color) => (
+                            <i key={color} style={{ backgroundColor: color }} />
+                          ))}
+                        </span>
+                        <span className="theme-card-copy">
+                          <span className="theme-font-sample">Aa</span>
+                          <span>
+                            <b>{theme.headingFont}</b>
+                            <small>{theme.bodyFont}</small>
+                          </span>
+                        </span>
+                        <span className="theme-card-description">
+                          {theme.description}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="info-callout theme-info-callout">
+                  <CircleAlert size={17} />
+                  <p>
+                    Este ajuste modifica la interfaz de KiroMail para todos los
+                    usuarios. Las plantillas y los correos conservan su propio
+                    diseño.
+                  </p>
                 </div>
               </section>
             </div>

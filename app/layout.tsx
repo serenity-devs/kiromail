@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
+import { uiThemeIds } from "@/lib/ui-themes";
 import "./globals.css";
+
+const themeBootScript = `try{var theme=localStorage.getItem("kiromail-theme");if(${JSON.stringify(uiThemeIds)}.includes(theme)){document.documentElement.dataset.theme=theme}}catch(error){}`;
 
 export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
@@ -25,8 +28,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es">
-      <body>{children}</body>
+    <html lang="es" suppressHydrationWarning>
+      <body>
+        <script dangerouslySetInnerHTML={{ __html: themeBootScript }} />
+        {children}
+      </body>
     </html>
   );
 }
