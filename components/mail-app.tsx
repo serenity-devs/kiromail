@@ -3,6 +3,11 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import {
+  apiKeyScopeGroups,
+  apiKeyScopeLabels,
+  type ApiKeyScope,
+} from "@/lib/api-key-scopes";
 import { apiRequest } from "@/lib/client-api";
 import { suggestEmailCorrection } from "@/lib/email-quality";
 import {
@@ -608,6 +613,18 @@ type SessionSummary = {
   expires_at: string;
   current: boolean;
 };
+type ApiKeySummary = {
+  id: string;
+  name: string;
+  prefix: string;
+  scopes: ApiKeyScope[];
+  expires_at?: string | null;
+  last_used_at?: string | null;
+  revoked_at?: string | null;
+  created_at: string;
+  created_by_name?: string | null;
+};
+type CreatedApiKey = ApiKeySummary & { token: string };
 type ListField = {
   id: string;
   key: string;
@@ -8114,6 +8131,7 @@ function SettingsView({ data, refresh, notify }: ViewProps) {
                 <p>El esquema JSON está disponible en <code>/api/openapi</code> y puede importarse en Postman, Insomnia o generadores compatibles.</p>
               </div>
             </section>
+            <ApiKeysPanel currentUser={data.currentUser} notify={notify} />
           </div>
 
           <div
@@ -8137,6 +8155,433 @@ function SettingsView({ data, refresh, notify }: ViewProps) {
         </div>
       </div>
     </>
+  );
+}
+
+function apiKeyIsActive(key: ApiKeySummary) {
+  return !key.revoked_at && (!key.expires_at || new Date(key.expires_at) > new Date());
+}
+
+function apiKeyDate(value?: string | null) {
+  return value
+    ? new Date(value).toLocaleString("es-ES", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      })
+    : "Nunca";
+}
+
+function ApiKeysPanel({
+  currentUser,
+  notify,
+}: {
+  currentUser: CurrentUser;
+  notify: (message: string) => void;
+}) {
+  const [keys, setKeys] = useState<ApiKeySummary[]>([]);
+  const [loading, setLoading] = useState(currentUser.role === "admin");
+  const [creating, setCreating] = useState(false);
+  const [created, setCreated] = useState<CreatedApiKey | null>(null);
+  const [revoking, setRevoking] = useState<ApiKeySummary | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
+
+  async function load() {
+    if (currentUser.role !== "admin") return;
+    setLoading(true);
+    try {
+      setKeys((await api<{ data: ApiKeySummary[] }>("/api/v1/api-keys")).data);
+    } catch (error) {
+      notify(
+        error instanceof Error
+          ? error.message
+          : "No se pudieron cargar las claves API",
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (currentUser.role !== "admin") return;
+    let active = true;
+    api<{ data: ApiKeySummary[] }>("/api/v1/api-keys")
+      .then((result) => {
+        if (active) setKeys(result.data);
+      })
+      .catch((error) =>
+        notify(
+          error instanceof Error
+            ? error.message
+            : "No se pudieron cargar las claves API",
+        ),
+      )
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+    // The panel fetches once on mount; action-driven reloads use load().
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser.role]);
+
+  const activeKeys = keys.filter(apiKeyIsActive);
+  const inactiveKeys = keys.filter((key) => !apiKeyIsActive(key));
+  const visibleKeys = showInactive ? keys : activeKeys;
+
+  return (
+    <section className="panel settings-section api-key-management">
+      <div className="settings-section-head">
+        <span className="metric-icon violet">
+          <KeyRound size={18} />
+        </span>
+        <div>
+          <h3>Claves API</h3>
+          <p>
+            Credenciales independientes para servidores e integraciones, con
+            permisos mínimos y revocación inmediata.
+          </p>
+        </div>
+        {currentUser.role === "admin" && (
+          <div className="settings-head-actions">
+            {inactiveKeys.length > 0 && (
+              <button
+                type="button"
+                className="button button-secondary button-small"
+                onClick={() => setShowInactive((value) => !value)}
+              >
+                {showInactive
+                  ? "Ocultar inactivas"
+                  : `Ver inactivas (${inactiveKeys.length})`}
+              </button>
+            )}
+            <button
+              type="button"
+              className="button button-primary button-small"
+              onClick={() => setCreating(true)}
+            >
+              <Plus size={14} /> Nueva clave API
+            </button>
+          </div>
+        )}
+      </div>
+
+      {currentUser.role !== "admin" ? (
+        <div className="info-callout">
+          <ShieldCheck size={17} />
+          <p>Solo un administrador puede crear, consultar o revocar claves API.</p>
+        </div>
+      ) : loading ? (
+        <p className="muted">Cargando claves API…</p>
+      ) : visibleKeys.length ? (
+        <div className="api-key-list">
+          {visibleKeys.map((key) => {
+            const active = apiKeyIsActive(key);
+            const expired = !key.revoked_at && Boolean(key.expires_at) && !active;
+            return (
+              <article key={key.id} className={active ? "" : "inactive"}>
+                <span className="api-key-icon">
+                  <KeyRound size={16} />
+                </span>
+                <div className="api-key-identity">
+                  <strong>{key.name}</strong>
+                  <code>km_live_{key.prefix}_••••••••</code>
+                  <small>
+                    Creada {apiKeyDate(key.created_at)}
+                    {key.created_by_name ? ` por ${key.created_by_name}` : ""}
+                  </small>
+                </div>
+                <div className="api-key-access">
+                  <div className="api-key-scopes">
+                    {key.scopes.slice(0, 4).map((scope) => (
+                      <span key={scope}>
+                        {apiKeyScopeLabels[scope] ?? scope}
+                      </span>
+                    ))}
+                    {key.scopes.length > 4 && (
+                      <span>+{key.scopes.length - 4} permisos</span>
+                    )}
+                  </div>
+                  <small>
+                    Último uso: {apiKeyDate(key.last_used_at)} · Caduca: {apiKeyDate(key.expires_at)}
+                  </small>
+                </div>
+                <div className="api-key-actions">
+                  <span
+                    className={`status-badge ${active ? "success" : expired ? "scheduled" : "failed"}`}
+                  >
+                    {active ? "Activa" : expired ? "Caducada" : "Revocada"}
+                  </span>
+                  {active && (
+                    <button
+                      type="button"
+                      className="button button-danger button-small"
+                      onClick={() => setRevoking(key)}
+                    >
+                      Revocar
+                    </button>
+                  )}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="api-key-empty">
+          <KeyRound size={21} />
+          <div>
+            <strong>
+              {keys.length ? "No hay claves activas" : "Todavía no hay claves API"}
+            </strong>
+            <p>
+              {keys.length
+                ? "Puedes consultar las caducadas o revocadas desde el histórico."
+                : "Crea una credencial distinta para cada integración y concede solo los permisos que necesite."}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {creating && (
+        <CreateApiKeyModal
+          close={() => setCreating(false)}
+          created={async (key) => {
+            setCreating(false);
+            setCreated(key);
+            await load();
+          }}
+        />
+      )}
+      {created && (
+        <ApiKeySecretModal
+          apiKey={created}
+          notify={notify}
+          close={() => {
+            setCreated(null);
+            notify("Clave API creada");
+          }}
+        />
+      )}
+      {revoking && (
+        <RevokeApiKeyModal
+          apiKey={revoking}
+          close={() => setRevoking(null)}
+          done={async () => {
+            setRevoking(null);
+            await load();
+            notify("Clave API revocada");
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
+function CreateApiKeyModal({
+  close,
+  created,
+}: {
+  close: () => void;
+  created: (key: CreatedApiKey) => Promise<void>;
+}) {
+  const [scopes, setScopes] = useState<ApiKeyScope[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [minimumExpiry] = useState(() =>
+    new Date(Date.now() + 60_000).toISOString().slice(0, 16),
+  );
+
+  function toggleScope(scope: ApiKeyScope) {
+    setScopes((current) => {
+      if (scope === "*") return current.includes("*") ? [] : ["*"];
+      const withoutFullAccess = current.filter((item) => item !== "*");
+      return withoutFullAccess.includes(scope)
+        ? withoutFullAccess.filter((item) => item !== scope)
+        : [...withoutFullAccess, scope];
+    });
+  }
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!scopes.length) {
+      setError("Selecciona al menos un permiso.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    const form = new FormData(event.currentTarget);
+    const expiresAt = String(form.get("expires_at") ?? "").trim();
+    try {
+      const key = await api<CreatedApiKey>("/api/v1/api-keys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.get("name"),
+          scopes,
+          expires_at: expiresAt ? new Date(expiresAt).toISOString() : null,
+        }),
+      });
+      await created(key);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo crear la clave");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title="Nueva clave API" eyebrow="Credencial de integración" close={close} wide>
+      <form
+        className="modal-form api-key-create-form"
+        onSubmit={submit}
+        onInvalid={() => setError(formValidationMessage)}
+      >
+        <div className="form-grid">
+          <label>
+            Nombre de la integración
+            <input
+              name="name"
+              maxLength={120}
+              placeholder="Web de pedidos, automatización…"
+              required
+              autoFocus
+            />
+          </label>
+          <label>
+            Caducidad opcional
+            <input
+              name="expires_at"
+              type="datetime-local"
+              min={minimumExpiry}
+            />
+          </label>
+        </div>
+        <fieldset className="api-key-permissions">
+          <legend>Permisos</legend>
+          <p>Aplica el principio de mínimo privilegio. Podrás revocar la clave, pero sus permisos no se editan.</p>
+          <div>
+            {apiKeyScopeGroups.map((group) => (
+              <section key={group.label}>
+                <header>
+                  <strong>{group.label}</strong>
+                  <small>{group.description}</small>
+                </header>
+                <div>
+                  {group.scopes.map((scope) => (
+                    <label key={scope.id}>
+                      <input
+                        type="checkbox"
+                        checked={scopes.includes(scope.id)}
+                        onChange={() => toggleScope(scope.id)}
+                      />
+                      <span>
+                        <strong>{scope.label}</strong>
+                        <code>{scope.id}</code>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+            ))}
+          </div>
+        </fieldset>
+        {error && <p className="form-error">{error}</p>}
+        <ModalActions close={close} saving={busy} label="Crear clave API" />
+      </form>
+    </Modal>
+  );
+}
+
+function ApiKeySecretModal({
+  apiKey,
+  notify,
+  close,
+}: {
+  apiKey: CreatedApiKey;
+  notify: (message: string) => void;
+  close: () => void;
+}) {
+  async function copyToken() {
+    try {
+      await navigator.clipboard.writeText(apiKey.token);
+      notify("Clave copiada");
+    } catch {
+      notify("No se pudo copiar; selecciónala manualmente");
+    }
+  }
+  return (
+    <Modal title="Guarda esta clave ahora" eyebrow="Se muestra una sola vez" close={close}>
+      <div className="modal-form api-key-secret">
+        <div className="info-callout">
+          <CircleAlert size={17} />
+          <p>
+            KiroMail solo almacena su hash. Al cerrar esta ventana no podrás volver a consultar el secreto.
+          </p>
+        </div>
+        <label>
+          Clave de {apiKey.name}
+          <span className="api-key-secret-value">
+            <input value={apiKey.token} readOnly onFocus={(event) => event.currentTarget.select()} />
+            <button type="button" className="button button-secondary" onClick={copyToken}>
+              <Copy size={15} /> Copiar
+            </button>
+          </span>
+        </label>
+        <p className="field-help">
+          Úsala como <code>Authorization: Bearer {apiKey.token.slice(0, 20)}…</code>
+        </p>
+        <footer className="modal-actions">
+          <button type="button" className="button button-primary" onClick={close}>
+            Ya la he guardado
+          </button>
+        </footer>
+      </div>
+    </Modal>
+  );
+}
+
+function RevokeApiKeyModal({
+  apiKey,
+  close,
+  done,
+}: {
+  apiKey: ApiKeySummary;
+  close: () => void;
+  done: () => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function revoke() {
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/v1/api-keys", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: apiKey.id }),
+      });
+      await done();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo revocar la clave");
+      setBusy(false);
+    }
+  }
+  return (
+    <Modal title="Revocar clave API" eyebrow="Acción inmediata" close={close}>
+      <div className="modal-form">
+        <p className="bulk-action-description">
+          <strong>{apiKey.name}</strong> dejará de autenticar peticiones inmediatamente. Esta acción no se puede deshacer; si vuelve a necesitar acceso tendrás que crear otra clave.
+        </p>
+        {error && <p className="form-error">{error}</p>}
+        <footer className="modal-actions">
+          <button type="button" className="button button-secondary" onClick={close}>
+            Cancelar
+          </button>
+          <button type="button" className="button button-danger" disabled={busy} onClick={revoke}>
+            {busy ? "Revocando…" : "Revocar clave"}
+          </button>
+        </footer>
+      </div>
+    </Modal>
   );
 }
 
