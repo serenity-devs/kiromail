@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+app_dir=/opt/kiromail
+release_base_url=https://github.com/serenity-devs/kiromail/releases/download/production
+update_lock=/run/lock/kiromail-update.lock
+temporary_dir=
+
+cleanup() {
+  if [[ -n "$temporary_dir" && -d "$temporary_dir" ]]; then
+    rm -rf -- "$temporary_dir"
+  fi
+}
+trap cleanup EXIT
+
+exec 8>"$update_lock"
+if ! flock -n 8; then
+  echo "Another KiroMail update check is already running."
+  exit 0
+fi
+
+temporary_dir=$(mktemp -d /var/tmp/kiromail-update.XXXXXX)
+case "$temporary_dir" in
+  /var/tmp/kiromail-update.*) ;;
+  *) echo "Unexpected temporary directory: $temporary_dir" >&2; exit 70 ;;
+esac
+
+cache_buster=$(date -u +%s)
+curl --fail --silent --show-error --location --retry 3 \
+  --connect-timeout 10 --max-time 60 \
+  "$release_base_url/release.txt?version=$cache_buster" \
+  --output "$temporary_dir/release.txt"
+
+release=$(tr -d '\r\n' <"$temporary_dir/release.txt")
+if [[ ! "$release" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "The published release pointer is not a full commit SHA." >&2
+  exit 65
+fi
+
+if [[ -s "$app_dir/release.env" ]] \
+  && grep -Fqx "KIROMAIL_IMAGE=ghcr.io/serenity-devs/kiromail:$release" "$app_dir/release.env" \
+  && grep -Fqx "KIROMAIL_BACKUP_IMAGE=ghcr.io/serenity-devs/kiromail-backup:$release" "$app_dir/release.env"; then
+  echo "KiroMail $release is already installed."
+  exit 0
+fi
+
+download_and_verify() {
+  local asset_name=$1
+  local checksum_name="$asset_name.sha256"
+  curl --fail --silent --show-error --location --retry 3 \
+    --connect-timeout 10 --max-time 900 \
+    "$release_base_url/$asset_name" \
+    --output "$temporary_dir/$asset_name"
+  curl --fail --silent --show-error --location --retry 3 \
+    --connect-timeout 10 --max-time 60 \
+    "$release_base_url/$checksum_name" \
+    --output "$temporary_dir/$checksum_name"
+  read -r expected_hash expected_name <"$temporary_dir/$checksum_name"
+  if [[ ! "$expected_hash" =~ ^[0-9a-f]{64}$ || "$expected_name" != "$asset_name" ]]; then
+    echo "Invalid checksum document for $asset_name" >&2
+    exit 65
+  fi
+  (cd "$temporary_dir" && sha256sum --check "$checksum_name")
+  gzip --test "$temporary_dir/$asset_name"
+}
+
+app_asset="kiromail-$release.tar.gz"
+backup_asset="kiromail-backup-$release.tar.gz"
+download_and_verify "$app_asset"
+download_and_verify "$backup_asset"
+
+docker load --input "$temporary_dir/$app_asset"
+docker load --input "$temporary_dir/$backup_asset"
+
+app_image="ghcr.io/serenity-devs/kiromail:$release"
+backup_image="ghcr.io/serenity-devs/kiromail-backup:$release"
+app_revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$app_image")
+backup_revision=$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$backup_image")
+if [[ "$app_revision" != "$release" || "$backup_revision" != "$release" ]]; then
+  echo "Loaded image labels do not match release $release." >&2
+  exit 65
+fi
+
+exec /usr/local/sbin/kiromail-deploy "$release"

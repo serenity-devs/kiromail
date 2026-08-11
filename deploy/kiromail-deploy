@@ -40,10 +40,10 @@ fi
 umask 077
 printf 'KIROMAIL_IMAGE=%s\nKIROMAIL_BACKUP_IMAGE=%s\n' "$app_image" "$backup_image" >"$candidate_release"
 
-echo "Pulling immutable images for $release"
-docker pull "$app_image"
-docker pull "$backup_image"
-docker image inspect "$app_image" "$backup_image" >/dev/null
+if ! docker image inspect "$app_image" "$backup_image" >/dev/null 2>&1; then
+  echo "The verified images for $release have not been loaded." >&2
+  exit 66
+fi
 
 candidate_compose=(docker compose --env-file "$app_dir/.env" --env-file "$candidate_release" -f "$compose_file")
 "${candidate_compose[@]}" config --quiet

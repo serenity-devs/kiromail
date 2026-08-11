@@ -1,0 +1,12 @@
+[Unit]
+Description=Check GitHub for a new KiroMail production release
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=3min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=kiromail-update.service
+
+[Install]
+WantedBy=timers.target

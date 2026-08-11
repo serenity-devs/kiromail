@@ -207,46 +207,43 @@ el alias `kiromail-app`.
 
 ### 11.1 Preparación única del servidor
 
-1. Genera una clave Ed25519 exclusiva para Actions. No reutilices una clave
-   personal ni una clave con acceso a otros repositorios.
-2. Ejecuta `deploy/install-server.sh PUBLIC_KEY` como `root`. Instala el Compose
-   en `/opt/kiromail`, un usuario `kiromail-deploy` y un comando SSH forzado que
-   únicamente acepta `deploy` seguido de un SHA completo.
-3. Copia `deploy/server.env.example` a `/opt/kiromail/.env`, ajusta el email del
+1. Ejecuta `deploy/install-server.sh` como `root`. Instala el Compose en
+   `/opt/kiromail`, los scripts propiedad de `root` y un timer de systemd.
+2. Copia `deploy/server.env.example` a `/opt/kiromail/.env`, ajusta el email del
    primer administrador y conserva el archivo como `root:root` con modo `0600`.
-4. Genera los secretos sin sobrescribir ninguno existente:
+3. Genera los secretos sin sobrescribir ninguno existente:
 
    ```bash
    KIROMAIL_SECRETS_DIR=/opt/kiromail/secrets kiromail-init-secrets
    ```
 
-5. Añade `deploy/Caddyfile.kiromail` al Caddy compartido, valida primero su
+4. Añade `deploy/Caddyfile.kiromail` al Caddy compartido, valida primero su
    configuración y usa `caddy reload`; no es necesario reiniciar el proxy ni la
    aplicación que ya atiende.
+5. Inicia la comprobación automática con
+   `systemctl start kiromail-update.timer`. El timer ya queda habilitado para
+   futuros arranques.
 
-La cuenta restringida no pertenece al grupo Docker, no conoce los secretos y
-no obtiene una shell. Solo puede invocar mediante `sudo` el script raíz de
-despliegue, que valida el SHA y usa archivos propiedad de `root`.
+El timer descarga únicamente los artefactos públicos de la release
+`production`, valida el SHA-256 de cada archivo y comprueba que la etiqueta OCI
+de ambas imágenes coincide con el commit publicado antes de invocar el
+despliegue. GitHub no recibe una clave del VPS y el VPS no guarda tokens de
+GitHub.
 
 ### 11.2 Configuración del repositorio GitHub
 
-Guarda estos Actions secrets:
-
-- `VPS_HOST`: host o IP SSH.
-- `VPS_SSH_PRIVATE_KEY`: mitad privada de la clave exclusiva de Actions.
-- `VPS_KNOWN_HOSTS`: salida verificada de `ssh-keyscan` para el host.
-
-Los paquetes `ghcr.io/serenity-devs/kiromail` y
-`ghcr.io/serenity-devs/kiromail-backup` deben tener visibilidad pública para
-que el VPS pueda descargarlos sin guardar un token permanente. Las imágenes no
+No hacen falta Actions secrets. `Deploy production` usa el `GITHUB_TOKEN`
+efímero para publicar dos archivos Docker `linux/amd64`, sus sumas SHA-256 y un
+puntero `release.txt` en la release pública `production`. Las imágenes no
 contienen secretos; todos se montan desde `/opt/kiromail/secrets`.
 
 Cada push a `main` ejecuta primero `Checks`. Solo un evento `push` satisfactorio
 puede activar `Deploy production`; un pull request de un fork no obtiene el
-token de paquetes ni acceso al VPS. GitHub etiqueta las imágenes con el SHA de
-40 caracteres, el servidor crea una copia cifrada antes de migrar, detiene el
-worker ordenadamente y espera el readiness de la nueva app. Si falla, vuelve a
-levantar las imágenes anotadas en `release.env`.
+token con escritura ni acceso al VPS. GitHub etiqueta las imágenes con el SHA
+de 40 caracteres. El timer comprueba una nueva versión cada tres minutos; el
+servidor crea una copia cifrada antes de migrar, detiene el worker ordenadamente
+y espera el readiness de la nueva app. Si falla, vuelve a levantar las imágenes
+anotadas en `release.env`.
 
 ### 11.3 Operación y límites del host
 

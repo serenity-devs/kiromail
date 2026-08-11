@@ -105,9 +105,10 @@ npm run prod:secrets
 
 Para servidores compartidos, `deploy/compose.server.yml` no publica puertos ni
 compila código en el VPS. El workflow `Deploy production` construye imágenes
-`linux/amd64` inmutables en GitHub, las publica en GHCR y llama por SSH a una
-cuenta con comando forzado. El servidor realiza backup, migración, healthcheck y
-rollback de aplicación; el proxy existente solo necesita la ruta descrita en
+`linux/amd64` inmutables en una release de GitHub con SHA-256. Un timer del VPS
+las verifica y despliega sin claves de servidor en GitHub ni tokens de GitHub en
+el host. El servidor realiza backup, migración, healthcheck y rollback de
+aplicación; el proxy existente solo necesita la ruta descrita en
 [la guía de producción](docs/produccion.md#11-despliegue-automático-en-un-servidor-compartido).
 
 El ejemplo [Caddyfile.example](Caddyfile.example) obtiene y renueva TLS automáticamente. La URL `/api/health/live` comprueba el proceso; `/api/health/ready` valida PostgreSQL, Redis y secretos. La sección Operaciones muestra workers, colas, almacenamiento, mantenimiento y trabajos agotados. `/api/metrics` sirve formato Prometheus con `Authorization: Bearer $METRICS_TOKEN`.

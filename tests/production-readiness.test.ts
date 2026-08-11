@@ -8,8 +8,8 @@ const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
 const productionCompose = readFileSync("docker-compose.production.yml", "utf8");
 const serverCompose = readFileSync("deploy/compose.server.yml", "utf8");
 const deployWorkflow = readFileSync(".github/workflows/deploy.yml", "utf8");
-const deployCommand = readFileSync("deploy/kiromail-actions-command", "utf8");
 const deployScript = readFileSync("deploy/kiromail-deploy", "utf8");
+const updateScript = readFileSync("deploy/kiromail-update", "utf8");
 const demoSeed = readFileSync("scripts/seed.ts", "utf8");
 const productionGuide = readFileSync("docs/produccion.md", "utf8");
 
@@ -37,11 +37,15 @@ test("shared-server deployment never binds public ports or builds on the VPS", (
   assert.match(serverCompose, /internal: true/);
 });
 
-test("GitHub deployment uses immutable images and a forced SSH command", () => {
+test("GitHub deployment publishes verified immutable archives without VPS credentials", () => {
   assert.match(deployWorkflow, /platforms: linux\/amd64/);
   assert.match(deployWorkflow, /workflow_run\.event == 'push'/);
-  assert.match(deployWorkflow, /kiromail-deploy@"\$VPS_HOST" "deploy \$RELEASE_SHA"/);
-  assert.match(deployCommand, /\[0-9a-f\]\{40\}/);
+  assert.match(deployWorkflow, /sha256sum kiromail-/);
+  assert.match(deployWorkflow, /gh release upload production/);
+  assert.doesNotMatch(deployWorkflow, /VPS_|ssh /);
+  assert.match(updateScript, /\[0-9a-f\]\{40\}/);
+  assert.match(updateScript, /sha256sum --check/);
+  assert.match(updateScript, /org\.opencontainers\.image\.revision/);
   assert.match(deployScript, /Creating an encrypted backup before migration/);
   assert.match(deployScript, /Applying additive database migrations/);
   assert.match(deployScript, /Restoring the previous application images/);

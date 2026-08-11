@@ -1,0 +1,18 @@
+[Unit]
+Description=Download and deploy the latest verified KiroMail production release
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/sbin/kiromail-update
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
