@@ -7706,7 +7706,9 @@ function SettingsView({ data, refresh, notify }: ViewProps) {
                       espacio de trabajo.
                     </p>
                   </div>
-                  <span className="status-badge success">5 temas</span>
+                  <span className="status-badge success">
+                    {uiThemes.length} temas
+                  </span>
                 </div>
                 <input type="hidden" name="ui_theme" value={uiTheme} />
                 <div

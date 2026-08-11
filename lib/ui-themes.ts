@@ -4,6 +4,7 @@ export const uiThemeIds = [
   "lavender",
   "terracotta",
   "graphite",
+  "terminal",
 ] as const;
 
 export type UiThemeId = (typeof uiThemeIds)[number];
@@ -57,6 +58,14 @@ export const uiThemes: ReadonlyArray<{
     headingFont: "SF Pro Display",
     bodyFont: "Helvetica Neue",
     colors: ["#345d75", "#ba5752", "#f0f2f3", "#fcfdfd"],
+  },
+  {
+    id: "terminal",
+    name: "Terminal",
+    description: "Negro profundo, verde fósforo y tipografía monoespaciada.",
+    headingFont: "SFMono Regular",
+    bodyFont: "Cascadia Code",
+    colors: ["#40d98b", "#ffb454", "#070b0d", "#0d1417"],
   },
 ];
 
