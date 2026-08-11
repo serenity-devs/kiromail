@@ -93,6 +93,12 @@ curl --fail "https://${APP_DOMAIN}/api/health/live"
 curl --fail "https://${APP_DOMAIN}/api/health/ready"
 ```
 
+El healthcheck interno del contenedor usa `/api/health/live`: permite arrancar
+una instalación nueva y entrar en el panel para completar SES y MFA.
+`/api/health/ready` no se relaja: su readiness sigue siendo el control de
+lanzamiento y solo responde correctamente cuando la configuración operativa
+obligatoria está completa.
+
 ## 6. Configuración inicial en la aplicación
 
 Entra con `ADMIN_EMAIL` y la contraseña de `secrets/admin_password`. En Ajustes:

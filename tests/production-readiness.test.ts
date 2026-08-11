@@ -32,6 +32,12 @@ test("production operations use the combined Compose wrapper", () => {
   assert.match(productionGuide, /https:\/\/\$\{APP_DOMAIN\}\/api\/health\/ready/);
 });
 
+test("server deployment gates startup on liveness and preserves readiness for onboarding", () => {
+  assert.match(serverCompose, /api\/health\/live/);
+  assert.doesNotMatch(serverCompose, /fetch\('http:\/\/127\.0\.0\.1:3000\/api\/health\/ready'/);
+  assert.match(productionGuide, /readiness sigue siendo el control de\s+lanzamiento/);
+});
+
 test("shared-server deployment never binds public ports or builds on the VPS", () => {
   assert.doesNotMatch(serverCompose, /^\s+ports:/m);
   assert.doesNotMatch(serverCompose, /^\s+build:/m);
