@@ -62,6 +62,9 @@ type EntityTag = {
   color: string;
   contact_count?: number;
 };
+
+const formValidationMessage =
+  "Revisa los campos obligatorios o con un formato incorrecto.";
 type ContactList = EntityTag & {
   subscription_id?: string;
   status?: string;
@@ -2723,7 +2726,11 @@ function ListDetailModal({
         </div>
       ) : (
         <>
-          <form className="modal-form list-settings-form" onSubmit={submit}>
+          <form
+            className="modal-form list-settings-form"
+            onSubmit={submit}
+            onInvalid={() => setError(formValidationMessage)}
+          >
             <div className="list-stats">
               <span>
                 <strong>{detail.stats.active}</strong> activas
@@ -2838,7 +2845,11 @@ function ListDetailModal({
             </fieldset>
             {error && <p className="form-error">{error}</p>}
             <footer className="list-save-row">
-              <button className="button button-primary" disabled={saving}>
+              <button
+                type="submit"
+                className="button button-primary"
+                disabled={saving}
+              >
                 {saving ? "Guardando…" : "Guardar configuración"}
               </button>
             </footer>
@@ -3043,7 +3054,11 @@ function ListFieldModal({
       eyebrow="Columna de la lista"
       close={close}
     >
-      <form className="modal-form" onSubmit={submit}>
+      <form
+        className="modal-form"
+        onSubmit={submit}
+        onInvalid={() => setError(formValidationMessage)}
+      >
         <div className="form-grid">
           <label>
             Clave estable
@@ -3198,7 +3213,11 @@ function SuppressionModal({
   }
   return (
     <Modal title="Añadir supresión" eyebrow="Control de envíos" close={close}>
-      <form className="modal-form" onSubmit={submit}>
+      <form
+        className="modal-form"
+        onSubmit={submit}
+        onInvalid={() => setError(formValidationMessage)}
+      >
         <label>
           Correo electrónico
           <input type="email" name="email" required autoFocus />
@@ -3278,7 +3297,11 @@ function SuppressionActionModal({
       eyebrow="Historial de entregabilidad"
       close={close}
     >
-      <form className="modal-form" onSubmit={submit}>
+      <form
+        className="modal-form"
+        onSubmit={submit}
+        onInvalid={() => setError(formValidationMessage)}
+      >
         <div className="suppression-action-summary">
           <strong>{item.email}</strong>
           <span>
@@ -7444,6 +7467,8 @@ function OperationsView({ notify }: { notify: (message: string) => void }) {
 function SettingsView({ data, refresh, notify }: ViewProps) {
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [validationError, setValidationError] = useState("");
+  const handlingInvalid = useRef(false);
   const [activeTab, setActiveTab] = useState<
     | "general"
     | "appearance"
@@ -7511,9 +7536,37 @@ function SettingsView({ data, refresh, notify }: ViewProps) {
     },
     { label: "Verificación en dos pasos", ok: data.currentUser.mfa_enabled },
   ];
+  function showInvalidField(event: React.InvalidEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (handlingInvalid.current) return;
+    handlingInvalid.current = true;
+    const control = event.target as
+      | HTMLInputElement
+      | HTMLSelectElement
+      | HTMLTextAreaElement;
+    const panel = control.closest<HTMLElement>(".settings-tab-panel");
+    const tabId = panel?.id.replace("settings-panel-", "") as
+      | (typeof settingsTabs)[number]["id"]
+      | undefined;
+    const label =
+      control.getAttribute("aria-label") ||
+      control.closest("label")?.firstChild?.textContent?.trim() ||
+      control.name;
+    if (tabId && configurableTabs.has(tabId)) setActiveTab(tabId);
+    setValidationError(
+      label
+        ? `Revisa «${label}» antes de guardar.`
+        : formValidationMessage,
+    );
+    window.setTimeout(() => {
+      control.focus();
+      handlingInvalid.current = false;
+    }, 0);
+  }
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
+    setValidationError("");
     const form = new FormData(event.currentTarget);
     const payload = {
       organization_name: form.get("organization_name"),
@@ -7625,7 +7678,11 @@ function SettingsView({ data, refresh, notify }: ViewProps) {
           <form
             className="settings-form"
             onSubmit={submit}
-            onChange={() => setDirty(true)}
+            onChange={() => {
+              setDirty(true);
+              setValidationError("");
+            }}
+            onInvalid={showInvalidField}
           >
             <div
               id="settings-panel-general"
@@ -8022,8 +8079,15 @@ function SettingsView({ data, refresh, notify }: ViewProps) {
 
             {configurableTabs.has(activeTab) && (
               <div className="settings-save" aria-live="polite">
-                <span>{dirty ? "Tienes cambios sin guardar" : "Todo guardado"}</span>
-                <button className="button button-primary" disabled={saving || !dirty}>
+                <span className={validationError ? "form-error" : undefined}>
+                  {validationError ||
+                    (dirty ? "Tienes cambios sin guardar" : "Todo guardado")}
+                </span>
+                <button
+                  type="submit"
+                  className="button button-primary"
+                  disabled={saving || !dirty}
+                >
                   <Check size={16} /> {saving ? "Guardando…" : "Guardar cambios"}
                 </button>
               </div>
@@ -8212,7 +8276,11 @@ function MfaPanel({
         </button>
       )}
       {setup && (
-        <form className="mfa-setup" onSubmit={enable}>
+        <form
+          className="mfa-setup"
+          onSubmit={enable}
+          onInvalid={() => notify(formValidationMessage)}
+        >
           <Image
             src={setup.qr_data_url}
             alt="Código QR para configurar TOTP"
@@ -8235,6 +8303,7 @@ function MfaPanel({
               />
             </label>
             <button
+              type="submit"
               className="button button-primary button-small"
               disabled={busy}
             >
@@ -8272,7 +8341,11 @@ function MfaPanel({
         </div>
       )}
       {disableOpen && (
-        <form className="mfa-disable" onSubmit={disable}>
+        <form
+          className="mfa-disable"
+          onSubmit={disable}
+          onInvalid={() => notify(formValidationMessage)}
+        >
           <label>
             Contraseña
             <input name="password" type="password" required />
@@ -8290,6 +8363,7 @@ function MfaPanel({
               Cancelar
             </button>
             <button
+              type="submit"
               className="button button-primary button-small"
               disabled={busy}
             >
@@ -8492,7 +8566,11 @@ function CreateUserModal({
   }
   return (
     <Modal title="Nuevo usuario" eyebrow="Acceso interno" close={close}>
-      <form className="modal-form" onSubmit={submit}>
+      <form
+        className="modal-form"
+        onSubmit={submit}
+        onInvalid={() => setError(formValidationMessage)}
+      >
         <div className="form-grid">
           <label>
             Nombre
@@ -8845,7 +8923,11 @@ function ContactModal({
       eyebrow="Newsletter"
       close={close}
     >
-      <form className="modal-form" onSubmit={submit}>
+      <form
+        className="modal-form"
+        onSubmit={submit}
+        onInvalid={() => setError(formValidationMessage)}
+      >
         <div className="form-grid">
           <label>
             Nombre
@@ -9011,7 +9093,11 @@ function ContactMergeModal({
       eyebrow="Identidad y consentimiento"
       close={close}
     >
-      <form className="modal-form" onSubmit={submit}>
+      <form
+        className="modal-form"
+        onSubmit={submit}
+        onInvalid={() => setError(formValidationMessage)}
+      >
         <div className="info-callout">
           <ShieldCheck size={18} />
           <p>
@@ -9118,7 +9204,11 @@ function ContactPrivacyModal({
       eyebrow="Derecho de supresión"
       close={close}
     >
-      <form className="modal-form" onSubmit={submit}>
+      <form
+        className="modal-form"
+        onSubmit={submit}
+        onInvalid={() => setError(formValidationMessage)}
+      >
         <div className="info-callout">
           <ShieldCheck size={18} />
           <p>
@@ -9909,25 +9999,36 @@ function SimpleEntityModal({
   done: () => Promise<void>;
 }) {
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
   const colors = ["#315c5b", "#d38464", "#745b9b", "#d0a04a", "#607d9a"];
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
+    setError("");
     const form = new FormData(event.currentTarget);
-    await api(kind === "list" ? "/api/lists" : "/api/tags", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        name: form.get("name"),
-        description: form.get("description") ?? "",
-        color: form.get("color"),
-      }),
-    });
-    await done();
+    try {
+      await api(kind === "list" ? "/api/lists" : "/api/tags", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: form.get("name"),
+          description: form.get("description") ?? "",
+          color: form.get("color"),
+        }),
+      });
+      await done();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo crear");
+      setSaving(false);
+    }
   }
   return (
     <Modal title={title} eyebrow="Audiencias" close={close}>
-      <form className="modal-form" onSubmit={submit}>
+      <form
+        className="modal-form"
+        onSubmit={submit}
+        onInvalid={() => setError(formValidationMessage)}
+      >
         <label>
           Nombre
           <input name="name" required autoFocus />
@@ -9957,6 +10058,7 @@ function SimpleEntityModal({
             ))}
           </div>
         </fieldset>
+        {error && <p className="form-error">{error}</p>}
         <ModalActions close={close} saving={saving} label="Crear" />
       </form>
     </Modal>
@@ -10245,7 +10347,11 @@ function SegmentModal({
       close={close}
       wide
     >
-      <form className="modal-form typed-segment-form" onSubmit={submit}>
+      <form
+        className="modal-form typed-segment-form"
+        onSubmit={submit}
+        onInvalid={() => setError(formValidationMessage)}
+      >
         <div className="form-grid">
           <label>
             Nombre
@@ -11212,7 +11318,11 @@ function ModalActions({
       <button type="button" className="button button-secondary" onClick={close}>
         Cancelar
       </button>
-      <button className="button button-primary" disabled={saving}>
+      <button
+        type="submit"
+        className="button button-primary"
+        disabled={saving}
+      >
         {saving ? "Guardando…" : label}
       </button>
     </footer>
