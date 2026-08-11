@@ -11,6 +11,8 @@ const auth = readFileSync("lib/auth.ts", "utf8");
 const apiAuth = readFileSync("lib/api-auth.ts", "utf8");
 const compose = readFileSync("docker-compose.yml", "utf8");
 const readme = readFileSync("README.md", "utf8");
+const loginPage = readFileSync("app/login/page.tsx", "utf8");
+const loginForm = readFileSync("components/login-form.tsx", "utf8");
 
 test("KiroMail is the public product identity", () => {
   assert.equal(packageJson.name, "kiromail");
@@ -25,4 +27,12 @@ test("new installations use KiroMail identifiers", () => {
   assert.match(compose, /postgres:\/\/kiromail:kiromail@postgres:5432\/kiromail/);
   assert.match(auth, /COOKIE_NAME = "kiromail_session"/);
   assert.match(apiAuth, /`km_live_\$\{prefix\}_/);
+});
+
+test("production login never exposes local bootstrap credentials", () => {
+  assert.match(loginPage, /productionConfigurationChecks/);
+  assert.match(loginPage, /<LoginForm localMode=\{!production\} \/>/);
+  assert.match(loginForm, /localMode \? "admin@kiromail\.local" : ""/);
+  assert.match(loginForm, /localMode \? "kiromail-local-2026" : ""/);
+  assert.match(loginForm, /\{localMode && <p className="local-hint">/);
 });

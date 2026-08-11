@@ -5,10 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CheckCircle2, Mail, ShieldCheck } from "lucide-react";
 
-export function LoginForm() {
+export function LoginForm({ localMode }: { localMode: boolean }) {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@kiromail.local");
-  const [password, setPassword] = useState("kiromail-local-2026");
+  const [email, setEmail] = useState(localMode ? "admin@kiromail.local" : "");
+  const [password, setPassword] = useState(localMode ? "kiromail-local-2026" : "");
   const [mfaCode, setMfaCode] = useState("");
   const [mfaRequired, setMfaRequired] = useState(false);
   const [error, setError] = useState("");
@@ -45,13 +45,13 @@ export function LoginForm() {
           <p className="eyebrow">Acceso privado</p>
           <h2>Qué alegría verte.</h2>
           <p className="muted">Entra en tu espacio de campañas.</p>
-          <label>Correo electrónico<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
-          <label>Contraseña<input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
+          <label>Correo electrónico<input type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required /></label>
+          <label>Contraseña<input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
           {mfaRequired&&<label>Código de verificación<input inputMode="numeric" autoComplete="one-time-code" pattern="[0-9A-Fa-f-]{6,32}" value={mfaCode} onChange={(e)=>setMfaCode(e.target.value)} placeholder="123456" required autoFocus/><span>También puedes usar un código de recuperación.</span></label>}
           <Link className="forgot-link" href="/forgot-password">He olvidado mi contraseña</Link>
           {error && <p className="form-error">{error}</p>}
           <button className="button button-primary button-wide" disabled={loading}>{loading ? "Entrando…" : "Entrar"}<ArrowRight size={17} /></button>
-          <p className="local-hint">Credenciales locales incluidas para esta primera ejecución.</p>
+          {localMode && <p className="local-hint">Credenciales locales incluidas para esta primera ejecución.</p>}
         </form>
       </section>
     </main>
