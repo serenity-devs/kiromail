@@ -2,7 +2,11 @@
 set -eu
 
 repository=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
-secrets_dir="$repository/secrets"
+secrets_dir=${KIROMAIL_SECRETS_DIR:-$repository/secrets}
+case "$secrets_dir" in
+  /*) ;;
+  *) echo "KIROMAIL_SECRETS_DIR debe ser una ruta absoluta" >&2; exit 1 ;;
+esac
 umask 077
 mkdir -p "$secrets_dir"
 

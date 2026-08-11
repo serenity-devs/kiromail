@@ -1,4 +1,8 @@
 FROM postgres:17-alpine@sha256:742f40ea20b9ff2ff31db5458d127452988a2164df9e17441e191f3b72252193
+ARG VCS_REF=unknown
+LABEL org.opencontainers.image.source="https://github.com/serenity-devs/kiromail" \
+  org.opencontainers.image.description="KiroMail encrypted backup runner" \
+  org.opencontainers.image.revision="$VCS_REF"
 RUN apk add --no-cache openssl
 COPY scripts/backup.sh scripts/backup-loop.sh scripts/restore.sh scripts/restore-test.sh /opt/kiromail/
 RUN chmod 0555 /opt/kiromail/*.sh

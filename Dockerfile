@@ -11,6 +11,10 @@ RUN npm run build
 
 FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS runner
 WORKDIR /app
+ARG VCS_REF=unknown
+LABEL org.opencontainers.image.source="https://github.com/serenity-devs/kiromail" \
+  org.opencontainers.image.description="KiroMail application and worker" \
+  org.opencontainers.image.revision="$VCS_REF"
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN apk add --no-cache su-exec

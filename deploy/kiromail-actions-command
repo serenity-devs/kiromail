@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+original_command=${SSH_ORIGINAL_COMMAND:-}
+if [[ ! "$original_command" =~ ^deploy[[:space:]]([0-9a-f]{40})$ ]]; then
+  echo "Only 'deploy <40-character commit SHA>' is allowed." >&2
+  exit 64
+fi
+
+exec sudo /usr/local/sbin/kiromail-deploy "${BASH_REMATCH[1]}"

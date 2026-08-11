@@ -103,6 +103,13 @@ npm run prod:secrets
 ./scripts/prod-compose.sh --profile ops up -d --build
 ```
 
+Para servidores compartidos, `deploy/compose.server.yml` no publica puertos ni
+compila código en el VPS. El workflow `Deploy production` construye imágenes
+`linux/amd64` inmutables en GitHub, las publica en GHCR y llama por SSH a una
+cuenta con comando forzado. El servidor realiza backup, migración, healthcheck y
+rollback de aplicación; el proxy existente solo necesita la ruta descrita en
+[la guía de producción](docs/produccion.md#11-despliegue-automático-en-un-servidor-compartido).
+
 El ejemplo [Caddyfile.example](Caddyfile.example) obtiene y renueva TLS automáticamente. La URL `/api/health/live` comprueba el proceso; `/api/health/ready` valida PostgreSQL, Redis y secretos. La sección Operaciones muestra workers, colas, almacenamiento, mantenimiento y trabajos agotados. `/api/metrics` sirve formato Prometheus con `Authorization: Bearer $METRICS_TOKEN`.
 
 En AWS se recomienda un rol IAM de mínimo privilegio. Si necesitas claves estáticas, la aplicación también admite `AWS_ACCESS_KEY_ID_FILE`, `AWS_SECRET_ACCESS_KEY_FILE` y `AWS_SESSION_TOKEN_FILE`; móntalas como secretos adicionales, no dentro de la imagen ni del repositorio.

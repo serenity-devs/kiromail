@@ -1,0 +1,11 @@
+kiromail.valuestats.com {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+		-Server
+	}
+
+	reverse_proxy kiromail-app:3000
+}

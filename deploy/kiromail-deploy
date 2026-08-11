@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+release=${1:-}
+if [[ ! "$release" =~ ^[0-9a-f]{40}$ ]]; then
+  echo "Expected a full 40-character commit SHA." >&2
+  exit 64
+fi
+
+app_dir=/opt/kiromail
+compose_file="$app_dir/compose.yml"
+current_release="$app_dir/release.env"
+previous_release="$app_dir/release.previous.env"
+lock_file=/run/lock/kiromail-deploy.lock
+registry=ghcr.io/serenity-devs
+app_image="$registry/kiromail:$release"
+backup_image="$registry/kiromail-backup:$release"
+candidate_release=$(mktemp "$app_dir/.release.env.XXXXXX")
+
+cleanup() {
+  rm -f "$candidate_release"
+}
+trap cleanup EXIT
+
+exec 9>"$lock_file"
+if ! flock -n 9; then
+  echo "Another KiroMail deployment is already running." >&2
+  exit 75
+fi
+
+if [[ ! -f "$compose_file" ]]; then
+  echo "Missing $compose_file" >&2
+  exit 66
+fi
+if ! docker network inspect valuebets_web >/dev/null 2>&1; then
+  echo "The shared proxy network valuebets_web does not exist." >&2
+  exit 69
+fi
+
+umask 077
+printf 'KIROMAIL_IMAGE=%s\nKIROMAIL_BACKUP_IMAGE=%s\n' "$app_image" "$backup_image" >"$candidate_release"
+
+echo "Pulling immutable images for $release"
+docker pull "$app_image"
+docker pull "$backup_image"
+docker image inspect "$app_image" "$backup_image" >/dev/null
+
+candidate_compose=(docker compose --env-file "$app_dir/.env" --env-file "$candidate_release" -f "$compose_file")
+"${candidate_compose[@]}" config --quiet
+
+had_previous=false
+if [[ -s "$current_release" ]] && "${candidate_compose[@]}" ps -q app | grep -q .; then
+  had_previous=true
+  current_compose=(docker compose --env-file "$app_dir/.env" --env-file "$current_release" -f "$compose_file")
+  echo "Creating an encrypted backup before migration"
+  "${current_compose[@]}" run --rm --no-deps backup /opt/kiromail/backup.sh
+  echo "Stopping the existing worker cleanly"
+  "${current_compose[@]}" stop -t 60 worker
+fi
+
+rollback() {
+  local status=$?
+  trap - ERR
+  echo "Deployment failed with status $status." >&2
+  "${candidate_compose[@]}" logs --no-color --tail=120 app worker migrate >&2 || true
+  if [[ "$had_previous" == true ]]; then
+    echo "Restoring the previous application images." >&2
+    current_compose=(docker compose --env-file "$app_dir/.env" --env-file "$current_release" -f "$compose_file")
+    "${current_compose[@]}" up -d --no-build app worker backup || true
+  fi
+  exit "$status"
+}
+trap rollback ERR
+
+echo "Starting private data services"
+"${candidate_compose[@]}" up -d --no-build postgres redis
+
+echo "Applying additive database migrations"
+"${candidate_compose[@]}" --profile migration run --rm migrate
+
+echo "Starting KiroMail $release"
+"${candidate_compose[@]}" up -d --no-build app worker
+
+app_container=$("${candidate_compose[@]}" ps -q app)
+if [[ -z "$app_container" ]]; then
+  echo "The app container was not created." >&2
+  false
+fi
+
+for attempt in {1..30}; do
+  health=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$app_container")
+  if [[ "$health" == healthy ]]; then
+    break
+  fi
+  if [[ "$health" == unhealthy ]]; then
+    echo "The new app container is unhealthy." >&2
+    false
+  fi
+  if [[ "$attempt" -eq 30 ]]; then
+    echo "Timed out waiting for the new app healthcheck." >&2
+    false
+  fi
+  sleep 4
+done
+
+echo "Starting encrypted daily backups"
+"${candidate_compose[@]}" up -d --no-build backup
+
+if [[ -s "$current_release" ]]; then
+  install -m 0600 "$current_release" "$previous_release"
+fi
+install -m 0600 "$candidate_release" "$current_release"
+trap - ERR
+
+echo "KiroMail $release is healthy."
+"${candidate_compose[@]}" ps

@@ -1,0 +1,82 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows: [Checks]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: kiromail-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      APP_IMAGE: ghcr.io/serenity-devs/kiromail
+      BACKUP_IMAGE: ghcr.io/serenity-devs/kiromail-backup
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish application image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.APP_IMAGE }}:${{ env.RELEASE_SHA }}
+          build-args: VCS_REF=${{ env.RELEASE_SHA }}
+          cache-from: type=gha,scope=kiromail-app
+          cache-to: type=gha,mode=max,scope=kiromail-app
+
+      - name: Build and publish backup image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.backup
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.BACKUP_IMAGE }}:${{ env.RELEASE_SHA }}
+          build-args: VCS_REF=${{ env.RELEASE_SHA }}
+          cache-from: type=gha,scope=kiromail-backup
+          cache-to: type=gha,mode=max,scope=kiromail-backup
+
+      - name: Configure restricted SSH key
+        env:
+          VPS_SSH_PRIVATE_KEY: ${{ secrets.VPS_SSH_PRIVATE_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$VPS_SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519 ~/.ssh/known_hosts
+
+      - name: Deploy immutable release
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+        run: >-
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes
+          kiromail-deploy@"$VPS_HOST" "deploy $RELEASE_SHA"

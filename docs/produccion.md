@@ -197,3 +197,66 @@ Configura como mínimo:
 Compose limita por defecto cada log JSON a cinco archivos de 20 MiB. Ajusta
 `DOCKER_LOG_MAX_SIZE` y `DOCKER_LOG_MAX_FILES` después de medir, sin desactivar
 la retención externa de logs necesaria para investigar incidentes.
+
+## 11. Despliegue automático en un servidor compartido
+
+KiroMail incluye una variante para convivir con otra aplicación y su proxy. No
+publica puertos, no incluye Caddy propio y no compila en el servidor. App y
+worker usan una red privada; solo app se conecta a la red externa del proxy con
+el alias `kiromail-app`.
+
+### 11.1 Preparación única del servidor
+
+1. Genera una clave Ed25519 exclusiva para Actions. No reutilices una clave
+   personal ni una clave con acceso a otros repositorios.
+2. Ejecuta `deploy/install-server.sh PUBLIC_KEY` como `root`. Instala el Compose
+   en `/opt/kiromail`, un usuario `kiromail-deploy` y un comando SSH forzado que
+   únicamente acepta `deploy` seguido de un SHA completo.
+3. Copia `deploy/server.env.example` a `/opt/kiromail/.env`, ajusta el email del
+   primer administrador y conserva el archivo como `root:root` con modo `0600`.
+4. Genera los secretos sin sobrescribir ninguno existente:
+
+   ```bash
+   KIROMAIL_SECRETS_DIR=/opt/kiromail/secrets kiromail-init-secrets
+   ```
+
+5. Añade `deploy/Caddyfile.kiromail` al Caddy compartido, valida primero su
+   configuración y usa `caddy reload`; no es necesario reiniciar el proxy ni la
+   aplicación que ya atiende.
+
+La cuenta restringida no pertenece al grupo Docker, no conoce los secretos y
+no obtiene una shell. Solo puede invocar mediante `sudo` el script raíz de
+despliegue, que valida el SHA y usa archivos propiedad de `root`.
+
+### 11.2 Configuración del repositorio GitHub
+
+Guarda estos Actions secrets:
+
+- `VPS_HOST`: host o IP SSH.
+- `VPS_SSH_PRIVATE_KEY`: mitad privada de la clave exclusiva de Actions.
+- `VPS_KNOWN_HOSTS`: salida verificada de `ssh-keyscan` para el host.
+
+Los paquetes `ghcr.io/serenity-devs/kiromail` y
+`ghcr.io/serenity-devs/kiromail-backup` deben tener visibilidad pública para
+que el VPS pueda descargarlos sin guardar un token permanente. Las imágenes no
+contienen secretos; todos se montan desde `/opt/kiromail/secrets`.
+
+Cada push a `main` ejecuta primero `Checks`. Solo un evento `push` satisfactorio
+puede activar `Deploy production`; un pull request de un fork no obtiene el
+token de paquetes ni acceso al VPS. GitHub etiqueta las imágenes con el SHA de
+40 caracteres, el servidor crea una copia cifrada antes de migrar, detiene el
+worker ordenadamente y espera el readiness de la nueva app. Si falla, vuelve a
+levantar las imágenes anotadas en `release.env`.
+
+### 11.3 Operación y límites del host
+
+`deploy/server.env.example` trae un perfil conservador para 2 GiB y reduce la
+concurrencia de envío. Es adecuado para puesta en marcha y volúmenes modestos;
+antes de importar o enviar de forma sostenida a la referencia de 100.000
+contactos, amplía a 4 GiB como mínimo y vuelve a medir PostgreSQL, worker y
+latencia.
+
+El primer acceso usa el email de `/opt/kiromail/.env` y la contraseña generada
+en `/opt/kiromail/secrets/admin_password`. Consúltala una sola vez mediante SSH,
+entra, cambia la contraseña y activa TOTP. Después completa Amazon SES, SNS y
+DNS siguiendo las secciones 4, 6 y 7.
