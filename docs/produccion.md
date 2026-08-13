@@ -68,7 +68,7 @@ En una única región AWS:
    `https://APP_DOMAIN/api/events/ses` y confirma la suscripción.
 7. Añade todos los ARN autorizados a `SNS_TOPIC_ARNS` en `.env`.
 
-Permisos IAM mínimos habituales: `ses:SendEmail`, `ses:GetAccount`,
+Permisos IAM mínimos habituales: `ses:SendEmail`, `ses:SendRawEmail`, `ses:GetAccount`,
 `ses:ListEmailIdentities`, `ses:GetEmailIdentity`,
 `ses:ListConfigurationSets` y `ses:GetConfigurationSetEventDestinations`. La
 conciliación añade `ses:ListSuppressedDestinations` y el modo bidireccional
@@ -208,8 +208,9 @@ la retención externa de logs necesaria para investigar incidentes.
 
 KiroMail incluye una variante para convivir con otra aplicación y su proxy. No
 publica puertos, no incluye Caddy propio y no compila en el servidor. App y
-worker usan una red privada; solo app se conecta a la red externa del proxy con
-el alias `kiromail-app`.
+worker usan una red privada; app se conecta a la red externa del proxy con el
+alias `kiromail-app` y worker a una red de salida dedicada para alcanzar Amazon
+SES, webhooks y S3 sin compartir la red del proxy.
 
 ### 11.1 Preparación única del servidor
 

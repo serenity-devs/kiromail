@@ -15,6 +15,7 @@ const productionSecrets = readFileSync("scripts/init-production-secrets.sh", "ut
 const queueSource = readFileSync("lib/queue.ts", "utf8");
 const demoSeed = readFileSync("scripts/seed.ts", "utf8");
 const productionGuide = readFileSync("docs/produccion.md", "utf8");
+const readme = readFileSync("README.md", "utf8");
 
 test("production bootstrap never invokes demo data", () => {
   assert.equal(
@@ -50,6 +51,13 @@ test("shared-server deployment never binds public ports or builds on the VPS", (
   assert.match(serverCompose, /internal: true/);
 });
 
+test("shared-server worker has isolated outbound connectivity", () => {
+  const workerService = serverCompose.match(/\n  worker:\n([\s\S]*?)(?=\n  backup:\n)/)?.[1] ?? "";
+  assert.match(workerService, /networks: \[private, egress\]/);
+  assert.match(serverCompose, /\n  egress:\n    driver: bridge\n/);
+  assert.doesNotMatch(workerService, /public_proxy/);
+});
+
 test("the non-root runtime receives private copies of Compose bind-mounted secrets", () => {
   assert.match(containerEntrypoint, /runtime_secrets_dir=\/tmp\/kiromail-secrets/);
   assert.match(containerEntrypoint, /chmod 0400 "\$secret_target"/);
@@ -66,6 +74,11 @@ test("database connection secrets avoid reserved URL characters", () => {
 test("Redis credentials are decoded before BullMQ authenticates", () => {
   assert.match(queueSource, /password: redis\.password \? decodeURIComponent\(redis\.password\)/);
   assert.match(queueSource, /username: redis\.username \? decodeURIComponent\(redis\.username\)/);
+});
+
+test("production IAM guidance permits raw transactional messages", () => {
+  assert.match(readme, /ses:SendRawEmail/);
+  assert.match(productionGuide, /ses:SendRawEmail/);
 });
 
 test("GitHub deployment publishes verified immutable archives without VPS credentials", () => {

@@ -77,7 +77,7 @@ ana@example.com,Ana,López,+34123456789,Madrid,España
 
 `MAIL_TRANSPORT` y `AWS_REGION` vacíos permiten gobernar ambos valores desde la interfaz. Si los defines en el entorno se convierten en overrides visibles en Entregabilidad.
 
-En una instancia EC2 es preferible asignar un rol IAM al servidor y omitir claves estáticas. Para el asistente y el envío hacen falta, como mínimo, `ses:SendEmail`, `ses:GetAccount`, `ses:ListEmailIdentities`, `ses:GetEmailIdentity`, `ses:ListConfigurationSets` y `ses:GetConfigurationSetEventDestinations`. Si activas conciliación de supresiones, añade `ses:ListSuppressedDestinations` y, para el modo bidireccional, `ses:PutSuppressedDestination`.
+En una instancia EC2 es preferible asignar un rol IAM al servidor y omitir claves estáticas. Para el asistente y el envío hacen falta, como mínimo, `ses:SendEmail`, `ses:SendRawEmail`, `ses:GetAccount`, `ses:ListEmailIdentities`, `ses:GetEmailIdentity`, `ses:ListConfigurationSets` y `ses:GetConfigurationSetEventDestinations`. Los mensajes transaccionales usan MIME raw para conservar adjuntos y contenido multipart. Si activas conciliación de supresiones, añade `ses:ListSuppressedDestinations` y, para el modo bidireccional, `ses:PutSuppressedDestination`.
 
 ## Seguridad antes de publicar
 

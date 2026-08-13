@@ -173,7 +173,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    networks: [private]
+    networks: [private, egress]
     security_opt: [no-new-privileges:true]
     logging: *default-logging
 
@@ -202,6 +202,8 @@ services:
 networks:
   private:
     internal: true
+  egress:
+    driver: bridge
   public_proxy:
     external: true
     name: ${PUBLIC_PROXY_NETWORK:-valuebets_web}
