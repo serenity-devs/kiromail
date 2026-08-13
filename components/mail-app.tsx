@@ -2,7 +2,8 @@
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import {
   apiKeyScopeGroups,
   apiKeyScopeLabels,
@@ -10,6 +11,11 @@ import {
 } from "@/lib/api-key-scopes";
 import { apiRequest } from "@/lib/client-api";
 import { suggestEmailCorrection } from "@/lib/email-quality";
+import {
+  panelPath,
+  panelSectionFromPathname,
+  type PanelSection as Section,
+} from "@/lib/panel-navigation";
 import {
   defaultUiTheme,
   normalizeUiTheme,
@@ -913,18 +919,6 @@ type AppData = {
   }[];
   currentUser: CurrentUser;
 };
-type Section =
-  | "dashboard"
-  | "contacts"
-  | "audiences"
-  | "templates"
-  | "transactional"
-  | "campaigns"
-  | "reports"
-  | "deliverability"
-  | "operations"
-  | "settings";
-
 const nav: { id: Section; label: string; icon: typeof Mail }[] = [
   { id: "dashboard", label: "Inicio", icon: LayoutDashboard },
   { id: "contacts", label: "Suscriptores", icon: ContactRound },
@@ -937,6 +931,11 @@ const nav: { id: Section; label: string; icon: typeof Mail }[] = [
   { id: "operations", label: "Operaciones", icon: Monitor },
   { id: "settings", label: "Ajustes", icon: Settings },
 ];
+
+function roleCanOpenSection(role: CurrentUser["role"], section: Section) {
+  if (role === "analyst" && ["contacts", "audiences", "templates", "transactional"].includes(section)) return false;
+  return section !== "operations" || role === "admin";
+}
 
 const statusLabel: Record<string, string> = {
   active: "Activo",
@@ -984,7 +983,8 @@ const api = apiRequest;
 
 export function MailApp() {
   const router = useRouter();
-  const [section, setSection] = useState<Section>("dashboard");
+  const pathname = usePathname();
+  const section = panelSectionFromPathname(pathname) ?? "dashboard";
   const [data, setData] = useState<AppData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1019,6 +1019,9 @@ export function MailApp() {
     document.documentElement.dataset.theme = theme;
     window.localStorage.setItem("kiromail-theme", theme);
   }, [data]);
+  useEffect(() => {
+    if (data && !roleCanOpenSection(data.currentUser.role, section)) router.replace("/");
+  }, [data, router, section]);
   function notify(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 3200);
@@ -1028,20 +1031,15 @@ export function MailApp() {
     router.replace("/login");
     router.refresh();
   }
+  function goToSection(nextSection: Section) {
+    router.push(panelPath(nextSection));
+    setMobileOpen(false);
+  }
 
   const title = nav.find((item) => item.id === section)?.label ?? "Inicio";
   const role = data?.currentUser.role;
   const visibleNav = nav.filter(
-    (item) =>
-      (role !== "analyst" ||
-        [
-          "dashboard",
-          "campaigns",
-          "reports",
-          "deliverability",
-          "settings",
-        ].includes(item.id)) &&
-      (item.id !== "operations" || role === "admin"),
+    (item) => !role || roleCanOpenSection(role, item.id),
   );
   const primaryNav = visibleNav.filter(
     (item) => !["deliverability", "operations", "settings"].includes(item.id),
@@ -1083,10 +1081,7 @@ export function MailApp() {
             <button
               key={item.id}
               className={section === item.id ? "active" : ""}
-              onClick={() => {
-                setSection(item.id);
-                setMobileOpen(false);
-              }}
+              onClick={() => goToSection(item.id)}
             >
               <item.icon size={18} strokeWidth={1.8} />
               <span>{item.label}</span>
@@ -1108,10 +1103,7 @@ export function MailApp() {
             <button
               key={item.id}
               className={section === item.id ? "active" : ""}
-              onClick={() => {
-                setSection(item.id);
-                setMobileOpen(false);
-              }}
+              onClick={() => goToSection(item.id)}
             >
               <item.icon size={18} strokeWidth={1.8} />
               <span>{item.label}</span>
@@ -1205,7 +1197,7 @@ export function MailApp() {
                 {section === "dashboard" && (
                   <Dashboard
                     data={data}
-                    go={setSection}
+                    go={goToSection}
                     compose={() => setComposeOpen(true)}
                   />
                 )}
@@ -1273,7 +1265,7 @@ export function MailApp() {
             setComposeOpen(false);
             await refresh(true);
             notify(message);
-            setSection("campaigns");
+            goToSection("campaigns");
           }}
         />
       )}
@@ -8124,7 +8116,7 @@ function SettingsView({ data, refresh, notify }: ViewProps) {
                   <h3>API e integraciones</h3>
                   <p>Contrato OpenAPI 3.1, scopes y ejemplos ejecutables.</p>
                 </div>
-                <a className="button button-secondary button-small" href="/api-docs">Abrir documentación</a>
+                <Link className="button button-secondary button-small" href="/api-docs">Abrir documentación</Link>
               </div>
               <div className="info-callout">
                 <CircleAlert size={17} />

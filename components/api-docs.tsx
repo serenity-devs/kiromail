@@ -54,6 +54,8 @@ export function ApiDocs({ document }: { document: unknown }) {
   return <div className="api-docs-shell">
     <header className="api-docs-topbar">
       <div className="api-docs-brand"><span className="brand-mark" aria-hidden="true"/><strong>KiroMail</strong><em>API</em></div>
+      {/* These links intentionally request the raw API response instead of a Next.js page. */}
+      {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
       <div className="api-docs-actions"><a href="/api/openapi" target="_blank" rel="noreferrer"><ExternalLink size={15}/> Ver JSON</a><a href="/api/openapi?download=1"><Download size={15}/> Descargar OpenAPI</a><Link href="/"><ArrowLeft size={15}/> Volver a la aplicación</Link></div>
     </header>
     <main className="api-docs-main">
