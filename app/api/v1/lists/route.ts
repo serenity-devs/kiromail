@@ -4,6 +4,11 @@ import { z } from "zod";
 import { authenticateApiRequest } from "@/lib/api-auth";
 import { sql } from "@/lib/db";
 import { versionedItems, versionedJson } from "@/lib/http-concurrency";
+import {
+  defaultSubscriberTableColumns,
+  normalizeSubscriberTableColumns,
+  subscriberTableColumnIds,
+} from "@/lib/list-table-columns";
 
 const fieldSchema = z.object({
   key: z.string().trim().regex(/^[a-z][a-z0-9_]{0,79}$/), label: z.string().trim().min(1).max(120),
@@ -19,6 +24,7 @@ const schema = z.object({
   default_from_name: z.string().max(200).default(""), default_from_email: z.union([z.email(), z.literal("")]).default(""),
   default_reply_to: z.union([z.email(), z.literal("")]).default(""), language: z.string().max(12).default("es"), legal_footer: z.string().max(5000).default(""),
   public_signup_enabled: z.boolean().default(false), double_opt_in: z.boolean().default(true), preference_center_visible: z.boolean().default(true), consent_text_default: z.string().max(5000).default(""),
+  subscriber_table_columns: z.array(z.enum(subscriberTableColumnIds)).max(subscriberTableColumnIds.length).transform(normalizeSubscriberTableColumns).default(defaultSubscriberTableColumns),
   fields: z.array(fieldSchema).max(100).default([]),
 });
 
@@ -49,8 +55,8 @@ export async function POST(request: Request) {
     const key = input.key ?? generatedKey(input.name);
     const result = await sql.begin(async (tx) => {
       const [list] = await tx<{ id: string; revision:number; [key:string]:unknown }[]>`
-        INSERT INTO lists (key,name,description,color,default_from_name,default_from_email,default_reply_to,language,legal_footer,public_signup_enabled,double_opt_in,preference_center_visible,consent_text_default)
-        VALUES (${key},${input.name},${input.description},${input.color},${input.default_from_name},${input.default_from_email},${input.default_reply_to},${input.language},${input.legal_footer},${input.public_signup_enabled},${input.double_opt_in},${input.preference_center_visible},${input.consent_text_default}) RETURNING *
+        INSERT INTO lists (key,name,description,color,default_from_name,default_from_email,default_reply_to,language,legal_footer,public_signup_enabled,double_opt_in,preference_center_visible,consent_text_default,subscriber_table_columns)
+        VALUES (${key},${input.name},${input.description},${input.color},${input.default_from_name},${input.default_from_email},${input.default_reply_to},${input.language},${input.legal_footer},${input.public_signup_enabled},${input.double_opt_in},${input.preference_center_visible},${input.consent_text_default},${input.subscriber_table_columns}) RETURNING *
       `;
       for (const [index, field] of input.fields.entries()) {
         const storedOptions = JSON.parse(JSON.stringify(field.options)) as never;

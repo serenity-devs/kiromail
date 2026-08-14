@@ -12,6 +12,11 @@ import {
 import { apiRequest } from "@/lib/client-api";
 import { suggestEmailCorrection } from "@/lib/email-quality";
 import {
+  defaultSubscriberTableColumns,
+  normalizeSubscriberTableColumns,
+  type SubscriberTableColumn,
+} from "@/lib/list-table-columns";
+import {
   panelPath,
   panelSectionFromPathname,
   type PanelSection as Section,
@@ -31,6 +36,7 @@ import {
   CalendarClock,
   Check,
   ChevronDown,
+  ChevronUp,
   CircleAlert,
   CircleCheck,
   Clock3,
@@ -671,6 +677,7 @@ type ListDetail = ListSummary & {
   double_opt_in: boolean;
   preference_center_visible: boolean;
   consent_text_default: string;
+  subscriber_table_columns: SubscriberTableColumn[];
   fields: ListField[];
   stats: { active: number; unsubscribed: number; total: number };
 };
@@ -2540,6 +2547,51 @@ function listCellValue(value: unknown, type?: string) {
   return String(value);
 }
 
+const subscriberTableColumnOptions: {
+  id: SubscriberTableColumn;
+  label: string;
+  description: string;
+}[] = [
+  {
+    id: "phone",
+    label: "Teléfono",
+    description: "Número de teléfono global del contacto.",
+  },
+  {
+    id: "language",
+    label: "Idioma",
+    description: "Idioma preferido para las comunicaciones.",
+  },
+  {
+    id: "timezone",
+    label: "Zona horaria",
+    description: "Zona horaria guardada en el contacto.",
+  },
+  {
+    id: "city",
+    label: "Ciudad",
+    description: "Ciudad guardada como dato global.",
+  },
+  {
+    id: "country",
+    label: "País",
+    description: "País guardado como dato global.",
+  },
+];
+
+const subscriberTableColumnLabels = Object.fromEntries(
+  subscriberTableColumnOptions.map((column) => [column.id, column.label]),
+) as Record<SubscriberTableColumn, string>;
+
+function subscriberTableValue(
+  item: ListSubscription,
+  column: SubscriberTableColumn,
+) {
+  if (column === "city" || column === "country")
+    return item.contact_fields?.[column];
+  return item[column];
+}
+
 function ListSubscriptionsView({
   list,
   back,
@@ -2641,11 +2693,19 @@ function ListSubscriptionsView({
     );
     discovered.delete("city");
     discovered.delete("country");
-    return ["city", "country", ...Array.from(discovered).sort()];
+    return Array.from(discovered).sort();
   }, [subscriptions]);
+  const subscriberColumns = normalizeSubscriberTableColumns(
+    detail?.subscriber_table_columns,
+  );
   const tableWidth = Math.max(
-    1280,
-    930 + (contactFieldKeys.length + activeFields.length) * 145,
+    960,
+    250 +
+      (subscriberColumns.length +
+        contactFieldKeys.length +
+        activeFields.length +
+        4) *
+        145,
   );
 
   return (
@@ -2722,16 +2782,16 @@ function ListSubscriptionsView({
             <thead>
               <tr>
                 <th>Suscriptor</th>
-                <th>Teléfono</th>
-                <th>Idioma</th>
-                <th>Zona horaria</th>
-                {contactFieldKeys.map((key) => (
-                  <th key={`contact-${key}`}>{readableFieldLabel(key)}</th>
-                ))}
                 {activeFields.map((field) => (
                   <th key={field.id} title={field.key}>
                     {field.label}
                   </th>
+                ))}
+                {subscriberColumns.map((column) => (
+                  <th key={column}>{subscriberTableColumnLabels[column]}</th>
+                ))}
+                {contactFieldKeys.map((key) => (
+                  <th key={`contact-${key}`}>{readableFieldLabel(key)}</th>
                 ))}
                 <th>Suscripción</th>
                 <th>Estado global</th>
@@ -2756,17 +2816,19 @@ function ListSubscriptionsView({
                       </span>
                     </div>
                   </td>
-                  <td>{listCellValue(item.phone)}</td>
-                  <td>{listCellValue(item.language)}</td>
-                  <td>{listCellValue(item.timezone)}</td>
-                  {contactFieldKeys.map((key) => (
-                    <td key={`${item.id}-contact-${key}`}>
-                      {listCellValue(item.contact_fields?.[key])}
-                    </td>
-                  ))}
                   {activeFields.map((field) => (
                     <td key={`${item.id}-${field.id}`}>
                       {listCellValue(item.fields?.[field.key], field.type)}
+                    </td>
+                  ))}
+                  {subscriberColumns.map((column) => (
+                    <td key={`${item.id}-${column}`}>
+                      {listCellValue(subscriberTableValue(item, column))}
+                    </td>
+                  ))}
+                  {contactFieldKeys.map((key) => (
+                    <td key={`${item.id}-contact-${key}`}>
+                      {listCellValue(item.contact_fields?.[key])}
                     </td>
                   ))}
                   <td>
@@ -3031,16 +3093,28 @@ function ListDetailModal({
 }) {
   const [detail, setDetail] = useState<ListDetail>();
   const [fieldOpen, setFieldOpen] = useState<ListField | "new" | null>(null);
+  const [subscriberColumns, setSubscriberColumns] = useState<
+    SubscriberTableColumn[]
+  >([...defaultSubscriberTableColumns]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   async function load() {
-    setDetail(await api<ListDetail>(`/api/v1/lists/${list.id}`));
+    const result = await api<ListDetail>(`/api/v1/lists/${list.id}`);
+    setDetail(result);
+    setSubscriberColumns(
+      normalizeSubscriberTableColumns(result.subscriber_table_columns),
+    );
   }
   useEffect(() => {
     let active = true;
     api<ListDetail>(`/api/v1/lists/${list.id}`)
       .then((result) => {
-        if (active) setDetail(result);
+        if (active) {
+          setDetail(result);
+          setSubscriberColumns(
+            normalizeSubscriberTableColumns(result.subscriber_table_columns),
+          );
+        }
       })
       .catch((err) =>
         setError(
@@ -3074,6 +3148,7 @@ function ListDetailModal({
           preference_center_visible:
             form.get("preference_center_visible") === "on",
           consent_text_default: form.get("consent_text_default"),
+          subscriber_table_columns: subscriberColumns,
         }),
       });
       await load();
@@ -3119,6 +3194,41 @@ function ListDetailModal({
     ]);
     await load();
   }
+  function toggleSubscriberColumn(
+    column: SubscriberTableColumn,
+    visible: boolean,
+  ) {
+    setSubscriberColumns((current) =>
+      visible
+        ? [...current, column]
+        : current.filter((item) => item !== column),
+    );
+  }
+  function moveSubscriberColumn(
+    column: SubscriberTableColumn,
+    direction: -1 | 1,
+  ) {
+    setSubscriberColumns((current) => {
+      const index = current.indexOf(column);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+  const orderedSubscriberColumnOptions = [
+    ...subscriberColumns
+      .map((column) =>
+        subscriberTableColumnOptions.find((option) => option.id === column),
+      )
+      .filter((option): option is (typeof subscriberTableColumnOptions)[number] =>
+        Boolean(option),
+      ),
+    ...subscriberTableColumnOptions.filter(
+      (option) => !subscriberColumns.includes(option.id),
+    ),
+  ];
   return (
     <Modal
       title={detail?.name ?? list.name}
@@ -3206,6 +3316,67 @@ function ListDetailModal({
                 />
               </label>
             </div>
+            <fieldset className="toggle-fieldset list-column-fieldset">
+              <legend>Columnas visibles en la tabla</legend>
+              <p className="panel-explainer">
+                Esta elección solo afecta a esta lista. Los campos propios se
+                muestran antes y conservan su orden independiente.
+              </p>
+              <div className="list-column-options">
+                {orderedSubscriberColumnOptions.map((option) => {
+                  const position = subscriberColumns.indexOf(option.id);
+                  const visible = position >= 0;
+                  return (
+                    <div
+                      className={`list-column-option${visible ? "" : " is-hidden"}`}
+                      key={option.id}
+                    >
+                      <label>
+                        <input
+                          type="checkbox"
+                          checked={visible}
+                          onChange={(event) =>
+                            toggleSubscriberColumn(
+                              option.id,
+                              event.target.checked,
+                            )
+                          }
+                        />
+                        <span>
+                          <strong>{option.label}</strong>
+                          <small>{option.description}</small>
+                        </span>
+                      </label>
+                      <div className="field-order">
+                        <button
+                          type="button"
+                          className="icon-button bordered"
+                          disabled={!visible || position === 0}
+                          onClick={() =>
+                            moveSubscriberColumn(option.id, -1)
+                          }
+                          aria-label={`Subir ${option.label}`}
+                        >
+                          <ChevronUp size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          className="icon-button bordered"
+                          disabled={
+                            !visible ||
+                            position === subscriberColumns.length - 1
+                          }
+                          onClick={() => moveSubscriberColumn(option.id, 1)}
+                          aria-label={`Bajar ${option.label}`}
+                        >
+                          <ChevronDown size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </fieldset>
             <fieldset className="toggle-fieldset">
               <legend>Alta pública y preferencias</legend>
               <label className="toggle-row">

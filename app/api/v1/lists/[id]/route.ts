@@ -4,6 +4,7 @@ import { authenticateApiRequest } from "@/lib/api-auth";
 import { sql } from "@/lib/db";
 import { preconditionResponse, requireIfMatch, resourceEtag, staleResourceResponse, versionedJson } from "@/lib/http-concurrency";
 import { importUsesListField, segmentUsesListField, templateUsesListField } from "@/lib/list-field-dependencies";
+import { normalizeSubscriberTableColumns, subscriberTableColumnIds } from "@/lib/list-table-columns";
 
 const schema = z.object({
   name: z.string().trim().min(1).max(200).optional(), description: z.string().max(1000).optional(),
@@ -11,6 +12,7 @@ const schema = z.object({
   default_from_email: z.union([z.email(), z.literal("")]).optional(), default_reply_to: z.union([z.email(), z.literal("")]).optional(),
   language: z.string().max(12).optional(), legal_footer: z.string().max(5000).optional(),
   public_signup_enabled: z.boolean().optional(), double_opt_in: z.boolean().optional(), preference_center_visible: z.boolean().optional(), consent_text_default: z.string().max(5000).optional(),
+  subscriber_table_columns: z.array(z.enum(subscriberTableColumnIds)).max(subscriberTableColumnIds.length).transform(normalizeSubscriberTableColumns).optional(),
   status: z.enum(["active","archived"]).optional(),
 }).refine((value) => Object.keys(value).length > 0);
 
@@ -49,6 +51,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
         language=COALESCE(${input.language ?? null},language), legal_footer=COALESCE(${input.legal_footer ?? null},legal_footer),
         public_signup_enabled=COALESCE(${input.public_signup_enabled ?? null},public_signup_enabled),double_opt_in=COALESCE(${input.double_opt_in ?? null},double_opt_in),
         preference_center_visible=COALESCE(${input.preference_center_visible ?? null},preference_center_visible),consent_text_default=COALESCE(${input.consent_text_default ?? null},consent_text_default),
+        subscriber_table_columns=CASE WHEN ${input.subscriber_table_columns !== undefined} THEN ${input.subscriber_table_columns ?? []} ELSE subscriber_table_columns END,
         status=COALESCE(${input.status ?? null},status),archived_at=CASE WHEN ${input.status ?? null}='active' THEN NULL WHEN ${input.status ?? null}='archived' THEN COALESCE(archived_at,now()) ELSE archived_at END,updated_at=now()
       WHERE id=${id} AND revision=${revision} RETURNING *
       `;

@@ -16,8 +16,8 @@ export async function POST(request:Request,context:{params:Promise<{id:string}>}
       if(!source)return null;
       const name=input.name??`${source.name} · copia`;const key=input.key??`${source.key.slice(0,145)}_${randomBytes(4).toString("hex")}`;
       const[created]=await tx<{id:string}[]>`
-        INSERT INTO lists(key,name,description,color,status,default_from_name,default_from_email,default_reply_to,language,legal_footer,public_signup_enabled,double_opt_in,preference_center_visible,consent_text_default,duplicated_from_id)
-        SELECT ${key},${name},description,color,'active',default_from_name,default_from_email,default_reply_to,language,legal_footer,false,double_opt_in,preference_center_visible,consent_text_default,id
+        INSERT INTO lists(key,name,description,color,status,default_from_name,default_from_email,default_reply_to,language,legal_footer,public_signup_enabled,double_opt_in,preference_center_visible,consent_text_default,subscriber_table_columns,duplicated_from_id)
+        SELECT ${key},${name},description,color,'active',default_from_name,default_from_email,default_reply_to,language,legal_footer,false,double_opt_in,preference_center_visible,consent_text_default,subscriber_table_columns,id
         FROM lists WHERE id=${source.id} RETURNING id
       `;
       await tx`INSERT INTO list_fields(list_id,key,label,type,help_text,required,default_value,options,validation,visibility,position,status)
