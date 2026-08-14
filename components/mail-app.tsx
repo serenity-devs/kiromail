@@ -24,6 +24,7 @@ import {
 } from "@/lib/ui-themes";
 import {
   Activity,
+  ArrowLeft,
   ArrowRight,
   BarChart3,
   BookOpen,
@@ -651,6 +652,7 @@ type ListField = {
   };
 };
 type ListSummary = EntityTag & {
+  etag?: string;
   key: string;
   description: string;
   total_subscription_count?: number;
@@ -671,6 +673,28 @@ type ListDetail = ListSummary & {
   consent_text_default: string;
   fields: ListField[];
   stats: { active: number; unsubscribed: number; total: number };
+};
+type ListSubscription = {
+  id: string;
+  etag?: string;
+  status: "pending" | "active" | "unsubscribed" | "archived";
+  source: string;
+  fields: Record<string, unknown>;
+  subscribed_at?: string;
+  confirmed_at?: string;
+  unsubscribed_at?: string;
+  reactivated_at?: string;
+  created_at: string;
+  updated_at: string;
+  contact_id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone: string;
+  language: string;
+  timezone: string;
+  contact_fields: Record<string, unknown>;
+  contact_status: string;
 };
 type Suppression = {
   id: string;
@@ -1973,7 +1997,11 @@ type ViewProps = {
 };
 
 function AudiencesView({ data, refresh, notify }: ViewProps) {
+  const [activeAudienceTab, setActiveAudienceTab] = useState<
+    "lists" | "segments" | "suppressions"
+  >("lists");
   const [listOpen, setListOpen] = useState(false);
+  const [viewingList, setViewingList] = useState<ListSummary | null>(null);
   const [selectedList, setSelectedList] = useState<ListSummary | null>(null);
   const [segmentOpen, setSegmentOpen] = useState(false);
   const [selectedSegment, setSelectedSegment] = useState<Segment | null>(null);
@@ -2049,12 +2077,35 @@ function AudiencesView({ data, refresh, notify }: ViewProps) {
     await refresh();
     notify(`Copia de “${label}” creada`);
   }
+  if (viewingList) {
+    const currentList =
+      data.lists.find((item) => item.id === viewingList.id) ?? viewingList;
+    return (
+      <>
+        <ListSubscriptionsView
+          list={currentList}
+          back={() => setViewingList(null)}
+          configure={() => setSelectedList(currentList)}
+        />
+        {selectedList && (
+          <ListDetailModal
+            list={selectedList}
+            close={() => setSelectedList(null)}
+            done={async (message) => {
+              await refresh();
+              notify(message);
+            }}
+          />
+        )}
+      </>
+    );
+  }
   return (
     <>
       <PageIntro
         eyebrow="Organización"
         title="Audiencias"
-        text="Organiza suscripciones y crea grupos dinámicos que siempre están al día."
+        text="Gestiona listas, segmentos y bloqueos sin mezclar contextos."
         actions={
           <>
             <button
@@ -2063,29 +2114,66 @@ function AudiencesView({ data, refresh, notify }: ViewProps) {
             >
               <RotateCcw size={15} /> Archivados
             </button>
-            <button
-              className="button button-primary"
-              onClick={() => setSegmentOpen(true)}
-            >
-              <Plus size={16} /> Nuevo segmento
-            </button>
+            {activeAudienceTab === "lists" && (
+              <button
+                className="button button-primary"
+                onClick={() => setListOpen(true)}
+              >
+                <Plus size={16} /> Nueva lista
+              </button>
+            )}
+            {activeAudienceTab === "segments" && (
+              <button
+                className="button button-primary"
+                onClick={() => setSegmentOpen(true)}
+              >
+                <Plus size={16} /> Nuevo segmento
+              </button>
+            )}
+            {activeAudienceTab === "suppressions" && (
+              <button
+                className="button button-primary"
+                onClick={() => setSuppressionOpen(true)}
+              >
+                <Plus size={16} /> Añadir supresión
+              </button>
+            )}
           </>
         }
       />
-      <div className="audience-grid">
+      <nav className="audience-tabs" aria-label="Secciones de audiencias">
+        <button
+          className={activeAudienceTab === "lists" ? "active" : ""}
+          onClick={() => setActiveAudienceTab("lists")}
+          aria-current={activeAudienceTab === "lists" ? "page" : undefined}
+        >
+          <ListFilter size={15} /> Listas <b>{data.lists.length}</b>
+        </button>
+        <button
+          className={activeAudienceTab === "segments" ? "active" : ""}
+          onClick={() => setActiveAudienceTab("segments")}
+          aria-current={activeAudienceTab === "segments" ? "page" : undefined}
+        >
+          <Layers3 size={15} /> Segmentos <b>{data.segments.length}</b>
+        </button>
+        <button
+          className={activeAudienceTab === "suppressions" ? "active" : ""}
+          onClick={() => setActiveAudienceTab("suppressions")}
+          aria-current={
+            activeAudienceTab === "suppressions" ? "page" : undefined
+          }
+        >
+          <ShieldCheck size={15} /> Supresiones <b>{suppressionCounts.active}</b>
+        </button>
+      </nav>
+      {activeAudienceTab === "lists" && (
+        <div className="audience-grid">
         <section className="panel audience-panel audience-panel-wide">
           <div className="panel-head">
             <div>
               <p className="eyebrow">Suscripciones</p>
               <h3>Newsletters y listas</h3>
             </div>
-            <button
-              className="icon-button bordered"
-              onClick={() => setListOpen(true)}
-              aria-label="Crear lista"
-            >
-              <Plus size={17} />
-            </button>
           </div>
           <p className="panel-explainer">
             Cada lista puede tener columnas propias —fecha de registro, sexo,
@@ -2097,7 +2185,7 @@ function AudiencesView({ data, refresh, notify }: ViewProps) {
                 <i style={{ background: item.color }} />
                 <button
                   className="collection-main"
-                  onClick={() => setSelectedList(item)}
+                  onClick={() => setViewingList(item)}
                 >
                   <strong>{item.name}</strong>
                   <small>{item.description || "Lista de suscripción"}</small>
@@ -2133,8 +2221,10 @@ function AudiencesView({ data, refresh, notify }: ViewProps) {
             ))}
           </div>
         </section>
-      </div>
-      <section className="panel suppression-panel">
+        </div>
+      )}
+      {activeAudienceTab === "suppressions" && (
+        <section className="panel suppression-panel">
         <div className="panel-head">
           <div>
             <p className="eyebrow">Entregabilidad y consentimiento</p>
@@ -2144,12 +2234,6 @@ function AudiencesView({ data, refresh, notify }: ViewProps) {
               y requiere una acción explícita.
             </p>
           </div>
-          <button
-            className="button button-secondary button-small"
-            onClick={() => setSuppressionOpen(true)}
-          >
-            <Plus size={14} /> Añadir supresión
-          </button>
         </div>
         <div className="suppression-summary">
           <span>
@@ -2264,8 +2348,10 @@ function AudiencesView({ data, refresh, notify }: ViewProps) {
             <p>No hay supresiones con estos filtros.</p>
           </div>
         )}
-      </section>
-      <section className="panel segments-panel">
+        </section>
+      )}
+      {activeAudienceTab === "segments" && (
+        <section className="panel segments-panel">
         <div className="panel-head">
           <div>
             <p className="eyebrow">Filtros vivos</p>
@@ -2339,16 +2425,9 @@ function AudiencesView({ data, refresh, notify }: ViewProps) {
               </footer>
             </article>
           ))}
-          <button
-            className="segment-card segment-add"
-            onClick={() => setSegmentOpen(true)}
-          >
-            <Plus size={22} />
-            <strong>Crear segmento</strong>
-            <span>Combina reglas tipadas y grupos</span>
-          </button>
         </div>
-      </section>
+        </section>
+      )}
       {listOpen && (
         <SimpleEntityModal
           title="Nueva lista"
@@ -2423,6 +2502,324 @@ function AudiencesView({ data, refresh, notify }: ViewProps) {
           }}
         />
       )}
+    </>
+  );
+}
+
+function listSubscriptionUrl(
+  listId: string,
+  options: { query: string; status: string; cursor?: string | null },
+) {
+  const params = new URLSearchParams({ limit: "100" });
+  if (options.query.trim()) params.set("q", options.query.trim());
+  if (options.status !== "any") params.set("status", options.status);
+  if (options.cursor) params.set("cursor", options.cursor);
+  return `/api/v1/lists/${listId}/subscriptions?${params.toString()}`;
+}
+
+function readableFieldLabel(key: string) {
+  const known: Record<string, string> = {
+    city: "Ciudad",
+    country: "País",
+  };
+  if (known[key]) return known[key];
+  const label = key.replaceAll("_", " ").trim();
+  return label ? `${label[0].toUpperCase()}${label.slice(1)}` : key;
+}
+
+function listCellValue(value: unknown, type?: string) {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "boolean") return value ? "Sí" : "No";
+  if (Array.isArray(value))
+    return value.length ? value.map((item) => String(item)).join(", ") : "—";
+  if (type === "date" || type === "datetime") {
+    const parsed = new Date(String(value));
+    if (!Number.isNaN(parsed.getTime())) return date.format(parsed);
+  }
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function ListSubscriptionsView({
+  list,
+  back,
+  configure,
+}: {
+  list: ListSummary;
+  back: () => void;
+  configure: () => void;
+}) {
+  const [detail, setDetail] = useState<ListDetail>();
+  const [subscriptions, setSubscriptions] = useState<ListSubscription[]>([]);
+  const [query, setQuery] = useState("");
+  const [status, setStatus] = useState("any");
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    api<ListDetail>(`/api/v1/lists/${list.id}`)
+      .then((result) => {
+        if (active) setDetail(result);
+      })
+      .catch((err) => {
+        if (active)
+          setError(
+            err instanceof Error ? err.message : "No se pudo cargar la lista",
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [list.id, list.etag]);
+
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError("");
+      api<{ data: ListSubscription[]; next_cursor: string | null }>(
+        listSubscriptionUrl(list.id, { query, status }),
+      )
+        .then((result) => {
+          if (!active) return;
+          setSubscriptions(result.data);
+          setNextCursor(result.next_cursor);
+        })
+        .catch((err) => {
+          if (active)
+            setError(
+              err instanceof Error
+                ? err.message
+                : "No se pudieron cargar las suscripciones",
+            );
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, 180);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [list.id, query, status]);
+
+  async function loadMore() {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    setError("");
+    try {
+      const result = await api<{
+        data: ListSubscription[];
+        next_cursor: string | null;
+      }>(listSubscriptionUrl(list.id, { query, status, cursor: nextCursor }));
+      setSubscriptions((current) => [...current, ...result.data]);
+      setNextCursor(result.next_cursor);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudieron cargar más suscripciones",
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  const activeFields = useMemo(
+    () =>
+      (detail?.fields ?? [])
+        .filter((field) => field.status === "active")
+        .sort((a, b) => a.position - b.position),
+    [detail],
+  );
+  const contactFieldKeys = useMemo(() => {
+    const discovered = new Set(
+      subscriptions.flatMap((item) => Object.keys(item.contact_fields ?? {})),
+    );
+    discovered.delete("city");
+    discovered.delete("country");
+    return ["city", "country", ...Array.from(discovered).sort()];
+  }, [subscriptions]);
+  const tableWidth = Math.max(
+    1280,
+    930 + (contactFieldKeys.length + activeFields.length) * 145,
+  );
+
+  return (
+    <>
+      <PageIntro
+        eyebrow={`Lista · ${detail?.key ?? list.key}`}
+        title={detail?.name ?? list.name}
+        text={
+          detail?.description ||
+          "Suscriptores, consentimiento y columnas propias de esta lista."
+        }
+        actions={
+          <div className="list-inline-actions">
+            <button className="button button-secondary" onClick={back}>
+              <ArrowLeft size={16} /> Volver a audiencias
+            </button>
+            <button className="button button-primary" onClick={configure}>
+              <Pencil size={15} /> Configurar lista
+            </button>
+          </div>
+        }
+      />
+      <div className="summary-strip list-inline-summary">
+        <span>
+          <strong>{number.format(detail?.stats.active ?? 0)}</strong> activas
+        </span>
+        <span>
+          <strong>{number.format(detail?.stats.unsubscribed ?? 0)}</strong> bajas
+        </span>
+        <span>
+          <strong>{number.format(detail?.stats.total ?? 0)}</strong> histórico
+        </span>
+        <span>
+          <strong>{number.format(activeFields.length)}</strong> columnas propias
+        </span>
+      </div>
+      <section className="panel table-panel list-subscriptions-panel">
+        <div className="list-table-heading">
+          <div>
+            <p className="eyebrow">Contenido de la lista</p>
+            <h3>Suscriptores y columnas</h3>
+          </div>
+          <span>
+            Desplázate horizontalmente para consultar todas las columnas
+          </span>
+        </div>
+        <div className="table-tools">
+          <label className="search-field">
+            <Search size={16} />
+            <input
+              placeholder="Buscar en cualquier columna…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+            />
+          </label>
+          <select
+            aria-label="Filtrar por estado de suscripción"
+            value={status}
+            onChange={(event) => setStatus(event.target.value)}
+          >
+            <option value="any">Todos los estados</option>
+            <option value="active">Activas</option>
+            <option value="pending">Pendientes</option>
+            <option value="unsubscribed">Bajas</option>
+            <option value="archived">Archivadas</option>
+          </select>
+        </div>
+        {error && <p className="form-error list-table-error">{error}</p>}
+        <div className="data-table-wrap list-subscriptions-wrap">
+          <table
+            className="data-table list-subscriptions-table"
+            style={{ minWidth: tableWidth }}
+          >
+            <thead>
+              <tr>
+                <th>Suscriptor</th>
+                <th>Teléfono</th>
+                <th>Idioma</th>
+                <th>Zona horaria</th>
+                {contactFieldKeys.map((key) => (
+                  <th key={`contact-${key}`}>{readableFieldLabel(key)}</th>
+                ))}
+                {activeFields.map((field) => (
+                  <th key={field.id} title={field.key}>
+                    {field.label}
+                  </th>
+                ))}
+                <th>Suscripción</th>
+                <th>Estado global</th>
+                <th>Origen</th>
+                <th>Alta</th>
+              </tr>
+            </thead>
+            <tbody>
+              {subscriptions.map((item) => (
+                <tr key={item.id}>
+                  <td>
+                    <div className="list-subscriber-cell">
+                      <span className="contact-avatar">
+                        {(item.first_name[0] || item.email[0]).toUpperCase()}
+                      </span>
+                      <span>
+                        <strong>
+                          {`${item.first_name} ${item.last_name}`.trim() ||
+                            "Sin nombre"}
+                        </strong>
+                        <small>{item.email}</small>
+                      </span>
+                    </div>
+                  </td>
+                  <td>{listCellValue(item.phone)}</td>
+                  <td>{listCellValue(item.language)}</td>
+                  <td>{listCellValue(item.timezone)}</td>
+                  {contactFieldKeys.map((key) => (
+                    <td key={`${item.id}-contact-${key}`}>
+                      {listCellValue(item.contact_fields?.[key])}
+                    </td>
+                  ))}
+                  {activeFields.map((field) => (
+                    <td key={`${item.id}-${field.id}`}>
+                      {listCellValue(item.fields?.[field.key], field.type)}
+                    </td>
+                  ))}
+                  <td>
+                    <span className={`status-badge ${item.status}`}>
+                      {statusLabel[item.status] ?? item.status}
+                    </span>
+                  </td>
+                  <td>
+                    <span className={`contact-status ${item.contact_status}`}>
+                      <i />
+                      {statusLabel[item.contact_status] ?? item.contact_status}
+                    </span>
+                  </td>
+                  <td>
+                    <code className="list-source">{item.source}</code>
+                  </td>
+                  <td>{date.format(new Date(item.subscribed_at ?? item.created_at))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {loading && !subscriptions.length ? (
+          <div className="table-empty">
+            <RefreshCw className="spin" size={22} />
+            <p>Cargando suscriptores…</p>
+          </div>
+        ) : !subscriptions.length ? (
+          <div className="table-empty">
+            <Users size={22} />
+            <p>
+              {query || status !== "any"
+                ? "No hay suscriptores que coincidan."
+                : "Esta lista todavía no tiene suscriptores."}
+            </p>
+          </div>
+        ) : null}
+        <div className="table-footer list-table-footer">
+          <span>
+            Mostrando {number.format(subscriptions.length)} suscriptores
+            {nextCursor ? " · hay más resultados" : ""}
+          </span>
+          {nextCursor && (
+            <button
+              className="button button-secondary button-small"
+              onClick={loadMore}
+              disabled={loadingMore}
+            >
+              {loadingMore ? "Cargando…" : "Cargar más"}
+            </button>
+          )}
+        </div>
+      </section>
     </>
   );
 }

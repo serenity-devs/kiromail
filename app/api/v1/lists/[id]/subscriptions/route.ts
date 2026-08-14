@@ -19,12 +19,15 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   if (!principal) return NextResponse.json({ error: { code: "unauthorized", message: "No autorizado" } }, { status: 401 });
   const { id } = await context.params; const url = new URL(request.url);
   const status = url.searchParams.get("status"); const cursor = url.searchParams.get("cursor");
+  const query = (url.searchParams.get("q") ?? "").trim().slice(0,200); const pattern = `%${query}%`;
   const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 50),1),200);
   const rows = await sql`
     SELECT s.id,s.revision,s.status,s.source,s.custom_values AS fields,s.subscribed_at,s.confirmed_at,s.unsubscribed_at,s.reactivated_at,s.created_at,s.updated_at,
       c.id AS contact_id,c.email,c.first_name,c.last_name,c.phone,c.language,c.timezone,c.custom_fields AS contact_fields,c.status AS contact_status
     FROM subscriptions s JOIN contacts c ON c.id=s.contact_id
     WHERE s.list_id=${id} AND c.merged_into_contact_id IS NULL AND c.anonymized_at IS NULL AND (${status}::text IS NULL OR s.status=${status})
+      AND (${query}='' OR c.email ILIKE ${pattern} OR c.first_name ILIKE ${pattern} OR c.last_name ILIKE ${pattern}
+        OR c.phone ILIKE ${pattern} OR c.custom_fields::text ILIKE ${pattern} OR s.custom_values::text ILIKE ${pattern})
       AND (${cursor}::uuid IS NULL OR s.created_at < (SELECT created_at FROM subscriptions WHERE id=${cursor}::uuid))
     ORDER BY s.created_at DESC,s.id DESC LIMIT ${limit + 1}
   `;
