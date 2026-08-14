@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CheckCircle2, Mail, ShieldCheck } from "lucide-react";
+import { ArrowRight, CheckCircle2, LockKeyhole, Mail, Server, ShieldCheck } from "lucide-react";
 
 export function LoginForm({ localMode }: { localMode: boolean }) {
   const router = useRouter();
@@ -27,20 +27,40 @@ export function LoginForm({ localMode }: { localMode: boolean }) {
   return (
     <main className="login-page">
       <section className="login-story">
-        <div className="login-brand"><span className="brand-mark" aria-hidden="true" /><span>KiroMail</span></div>
+        <div className="login-brand">
+          <span className="brand-mark" aria-hidden="true" />
+          <span>KiroMail</span>
+          <small><i aria-hidden="true" /> self-hosted</small>
+        </div>
         <div className="login-copy">
-          <p className="eyebrow light">Email marketing, en tu terreno</p>
+          <p className="eyebrow light"><span aria-hidden="true">~/</span> email marketing, en tu terreno</p>
           <h1>Campañas claras.<br /><em>Sin ruido alrededor.</em></h1>
           <p>Tu audiencia, tus datos y tus envíos en una herramienta diseñada para trabajar con calma.</p>
+          <div className="login-terminal" aria-hidden="true">
+            <header>
+              <span><i /><i /><i /></span>
+              <code>kiro@mail:~</code>
+              <b>online</b>
+            </header>
+            <div>
+              <p><span>$</span> status --workspace</p>
+              <dl>
+                <div><dt>audiencia</dt><dd><CheckCircle2 size={13} /> base propia</dd></div>
+                <div><dt>entrega</dt><dd><CheckCircle2 size={13} /> amazon ses</dd></div>
+                <div><dt>control</dt><dd><CheckCircle2 size={13} /> infraestructura propia</dd></div>
+              </dl>
+              <p className="login-terminal-result">3 checks · todo preparado</p>
+            </div>
+          </div>
         </div>
         <div className="login-points">
-          <span><CheckCircle2 size={17} /> Suscriptores y segmentos propios</span>
-          <span><CheckCircle2 size={17} /> Entrega preparada para Amazon SES</span>
-          <span><ShieldCheck size={17} /> Instalada en tu infraestructura</span>
+          <span><ShieldCheck size={15} /> datos bajo tu control</span>
+          <span><Server size={15} /> preparada para producción</span>
         </div>
       </section>
       <section className="login-panel">
         <form className="login-form" onSubmit={submit}>
+          <div className="login-form-topline"><span><i aria-hidden="true" /> secure_session</span><code>01</code></div>
           <div className="login-icon"><Mail size={25} /></div>
           <p className="eyebrow">Acceso privado</p>
           <h2>Qué alegría verte.</h2>
@@ -53,6 +73,7 @@ export function LoginForm({ localMode }: { localMode: boolean }) {
           <button className="button button-primary button-wide" disabled={loading}>{loading ? "Entrando…" : "Entrar"}<ArrowRight size={17} /></button>
           {localMode && <p className="local-hint">Credenciales locales incluidas para esta primera ejecución.</p>}
         </form>
+        <p className="login-security"><LockKeyhole size={13} /> acceso cifrado · sesión privada</p>
       </section>
     </main>
   );

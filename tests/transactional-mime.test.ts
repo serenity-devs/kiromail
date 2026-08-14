@@ -21,6 +21,7 @@ test("transactional MIME contains headers, alternatives and encoded attachment",
   });
   const source = mime.toString("utf8");
   assert.match(source, /Message-ID: <11111111-1111-4111-8111-111111111111@kiromail\.local>/i);
+  assert.match(source, /From: KiroMail <news@example\.com>/i);
   assert.match(source, /X-KiroMail-Channel: transactional/i);
   assert.match(source, /multipart\/mixed/i);
   assert.match(source, /multipart\/alternative/i);

@@ -424,7 +424,7 @@ export async function sendTransactionalMessage(messageId: string) {
   try{
     if (selectedTransport === "ses") {
       const response = await ses(env.awsRegion??message.aws_region).send(new SendEmailCommand({
-        FromEmailAddress: message.from_email,
+        FromEmailAddress: `${message.from_name} <${message.from_email}>`,
         Destination: { ToAddresses: [message.to_email] },
         ConfigurationSetName: message.configuration_set || undefined,
         EmailTags: [{ Name: "message_id", Value: message.id }, { Name: "channel", Value: "transactional" },...(message.template_version_id?[{Name:"template_version_id",Value:message.template_version_id}]:[])],
