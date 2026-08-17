@@ -496,23 +496,54 @@ export async function sendRecipient(recipientId: string) {
   return { messageId };
 }
 
-export async function sendTestEmail(input: { templateId: string; email: string; subject: string; fromName?: string; fromEmail?: string; replyTo?: string }) {
+type TestEmailSource = { templateId: string; campaignId?: never } | { campaignId: string; templateId?: never };
+type TestEmailContent = {
+  html_content: string;
+  text_content: string;
+  channel: "marketing" | "transactional";
+  physical_address: string;
+  ses_configuration_set: string;
+  mail_transport: "smtp" | "ses";
+  aws_region: string;
+  template_id: string | null;
+  template_version_id: string | null;
+  campaign_id: string | null;
+};
+
+export async function sendTestEmail(input: TestEmailSource & { email: string; subject: string; fromName?: string; fromEmail?: string; replyTo?: string }) {
   const settings = await assertSendingAvailable(input.fromEmail);
   const fromName = input.fromName?.trim() || settings.default_from_name;
   const fromEmail = input.fromEmail?.trim() || settings.default_from_email;
   const replyTo = input.replyTo === undefined ? settings.default_reply_to : input.replyTo;
-  const [row] = await sql<{ html_content: string; text_content: string; channel: "marketing" | "transactional"; physical_address: string; ses_configuration_set: string; mail_transport: "smtp" | "ses";aws_region:string }[]>`
-    SELECT COALESCE(v.html_content,t.html_content) AS html_content,
-      COALESCE(v.text_content,t.text_content) AS text_content,
-      t.channel,s.physical_address,
-      CASE WHEN t.channel='transactional'
-        THEN COALESCE(NULLIF(s.ses_transactional_configuration_set,''),s.ses_configuration_set)
-        ELSE COALESCE(NULLIF(s.ses_marketing_configuration_set,''),s.ses_configuration_set)
-      END AS ses_configuration_set,
-      s.mail_transport,s.aws_region
-    FROM templates t LEFT JOIN template_versions v ON v.id=t.published_version_id CROSS JOIN settings s WHERE t.id=${input.templateId}
-  `;
-  if (!row) throw new Error("La plantilla ya no existe");
+  const campaignId = input.campaignId;
+  const templateId = input.templateId;
+  let rows: TestEmailContent[];
+  if (campaignId) {
+    rows = await sql<TestEmailContent[]>`
+      SELECT c.html_content,c.text_content,'marketing' AS channel,s.physical_address,
+        COALESCE(NULLIF(s.ses_marketing_configuration_set,''),s.ses_configuration_set) AS ses_configuration_set,
+        s.mail_transport,s.aws_region,c.template_id,c.template_version_id,c.id AS campaign_id
+      FROM campaigns c CROSS JOIN settings s
+      WHERE c.id=${campaignId} AND c.archived_at IS NULL
+    `;
+  } else if (templateId) {
+    rows = await sql<TestEmailContent[]>`
+      SELECT COALESCE(v.html_content,t.html_content) AS html_content,
+        COALESCE(v.text_content,t.text_content) AS text_content,
+        t.channel,s.physical_address,
+        CASE WHEN t.channel='transactional'
+          THEN COALESCE(NULLIF(s.ses_transactional_configuration_set,''),s.ses_configuration_set)
+          ELSE COALESCE(NULLIF(s.ses_marketing_configuration_set,''),s.ses_configuration_set)
+        END AS ses_configuration_set,
+        s.mail_transport,s.aws_region,t.id AS template_id,v.id AS template_version_id,NULL::uuid AS campaign_id
+      FROM templates t LEFT JOIN template_versions v ON v.id=t.published_version_id CROSS JOIN settings s
+      WHERE t.id=${templateId}
+    `;
+  } else {
+    throw new Error("Falta el origen del correo de prueba");
+  }
+  const [row] = rows;
+  if (!row) throw new Error(campaignId ? "La campaña ya no existe" : "La plantilla ya no existe");
   const sample = withCampaignTemplateVariables(
     { first_name: "Prueba", last_name: "KiroMail", full_name: "Prueba KiroMail", email: input.email, city: "Madrid", country: "España" },
     {
@@ -538,8 +569,10 @@ export async function sendTestEmail(input: { templateId: string; email: string; 
       ConfigurationSetName: row.ses_configuration_set || undefined,
       EmailTags: [
         { Name: "channel", Value: row.channel },
-        { Name: "message_type", Value: "campaign_test" },
-        { Name: "template_id", Value: input.templateId },
+        { Name: "message_type", Value: row.campaign_id ? "campaign_test" : "template_test" },
+        ...(row.campaign_id ? [{ Name: "campaign_id", Value: row.campaign_id }] : []),
+        ...(row.template_id ? [{ Name: "template_id", Value: row.template_id }] : []),
+        ...(row.template_version_id ? [{ Name: "template_version_id", Value: row.template_version_id }] : []),
       ],
       Content: { Simple: { Subject: { Data: `[PRUEBA] ${subject}`, Charset: "UTF-8" }, Body: { Html: { Data: html, Charset: "UTF-8" }, Text: { Data: text, Charset: "UTF-8" } } } },
     }));
@@ -555,7 +588,9 @@ export async function sendTestEmail(input: { templateId: string; email: string; 
     provider_message_id: providerMessageId,
     status: selectedTransport === "ses" ? "provider_accepted" as const : "delivered" as const,
   } satisfies TestEmailResult;
-  await sql`INSERT INTO audit_log (action, entity_type, entity_id, detail) VALUES ('test_send', 'template', ${input.templateId}, ${sql.json({ email: input.email, ...result })})`;
+  const entityType = row.campaign_id ? "campaign" : "template";
+  const entityId = row.campaign_id ?? row.template_id!;
+  await sql`INSERT INTO audit_log (action, entity_type, entity_id, detail) VALUES ('test_send', ${entityType}, ${entityId}, ${sql.json({ email: input.email, template_version_id: row.template_version_id, ...result })})`;
   return result;
 }
 

@@ -12078,7 +12078,9 @@ function CampaignModal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          template_id: form.template_id,
+          ...(campaign && !templateChanged
+            ? { campaign_id: campaign.id }
+            : { template_id: form.template_id }),
           email: testEmail,
           subject: form.subject,
           from_name: form.from_name,
