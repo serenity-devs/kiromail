@@ -33,6 +33,10 @@ jobs:
 
       - uses: docker/setup-buildx-action@v3
 
+      - name: Resolve release metadata
+        id: release_metadata
+        run: echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
       - name: Build application archive
         uses: docker/build-push-action@v6
         with:
@@ -41,7 +45,9 @@ jobs:
           platforms: linux/amd64
           push: false
           tags: ${{ env.APP_IMAGE }}:${{ env.RELEASE_SHA }}
-          build-args: VCS_REF=${{ env.RELEASE_SHA }}
+          build-args: |
+            VCS_REF=${{ env.RELEASE_SHA }}
+            BUILD_DATE=${{ steps.release_metadata.outputs.build_date }}
           outputs: type=docker,dest=/tmp/kiromail-${{ env.RELEASE_SHA }}.tar
           cache-from: type=gha,scope=kiromail-app
           cache-to: type=gha,mode=max,scope=kiromail-app

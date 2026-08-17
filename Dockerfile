@@ -1,3 +1,6 @@
+ARG VCS_REF=local
+ARG BUILD_DATE=
+
 FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS dependencies
 WORKDIR /app
 COPY package.json package-lock.json ./
@@ -5,18 +8,26 @@ RUN npm ci
 
 FROM dependencies AS builder
 WORKDIR /app
+ARG VCS_REF
+ARG BUILD_DATE
+ENV KIROMAIL_BUILD_COMMIT=$VCS_REF
+ENV KIROMAIL_BUILD_DATE=$BUILD_DATE
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 
 FROM node:22-alpine@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32 AS runner
 WORKDIR /app
-ARG VCS_REF=unknown
+ARG VCS_REF
+ARG BUILD_DATE
 LABEL org.opencontainers.image.source="https://github.com/serenity-devs/kiromail" \
   org.opencontainers.image.description="KiroMail application and worker" \
-  org.opencontainers.image.revision="$VCS_REF"
+  org.opencontainers.image.revision="$VCS_REF" \
+  org.opencontainers.image.created="$BUILD_DATE"
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV KIROMAIL_BUILD_COMMIT=$VCS_REF
+ENV KIROMAIL_BUILD_DATE=$BUILD_DATE
 RUN apk add --no-cache su-exec
 COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=builder /app/.next ./.next

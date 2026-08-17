@@ -9,6 +9,11 @@ import {
   apiKeyScopeLabels,
   type ApiKeyScope,
 } from "@/lib/api-key-scopes";
+import {
+  buildInfo,
+  formatBuildDate,
+  shortBuildCommit,
+} from "@/lib/build-info";
 import { apiRequest } from "@/lib/client-api";
 import { suggestEmailCorrection } from "@/lib/email-quality";
 import {
@@ -1196,6 +1201,18 @@ export function MailApp() {
                   : "Mailpit · conectado"}
               </small>
             </div>
+          </div>
+          <div
+            className="deployment-stamp"
+            title={`Commit ${buildInfo.commit} · Compilado ${formatBuildDate(buildInfo.built_at)}`}
+          >
+            <span>Versión {buildInfo.version}</span>
+            <small>
+              {shortBuildCommit(buildInfo.commit)} ·{" "}
+              <time dateTime={buildInfo.built_at || undefined}>
+                {formatBuildDate(buildInfo.built_at)}
+              </time>
+            </small>
           </div>
           <button className="user-row" onClick={logout}>
             <span className="user-avatar">

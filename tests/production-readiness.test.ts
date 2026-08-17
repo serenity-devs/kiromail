@@ -8,6 +8,7 @@ const packageJson = JSON.parse(readFileSync("package.json", "utf8")) as {
 const productionCompose = readFileSync("docker-compose.production.yml", "utf8");
 const serverCompose = readFileSync("deploy/compose.server.yml", "utf8");
 const deployWorkflow = readFileSync(".github/workflows/deploy.yml", "utf8");
+const dockerfile = readFileSync("Dockerfile", "utf8");
 const deployScript = readFileSync("deploy/kiromail-deploy", "utf8");
 const updateScript = readFileSync("deploy/kiromail-update", "utf8");
 const containerEntrypoint = readFileSync("docker-entrypoint.sh", "utf8");
@@ -86,6 +87,9 @@ test("GitHub deployment publishes verified immutable archives without VPS creden
   assert.match(deployWorkflow, /workflow_run\.event == 'push'/);
   assert.match(deployWorkflow, /sha256sum kiromail-/);
   assert.match(deployWorkflow, /gh release upload production/);
+  assert.match(deployWorkflow, /BUILD_DATE=\$\{\{ steps\.release_metadata\.outputs\.build_date \}\}/);
+  assert.match(dockerfile, /ENV KIROMAIL_BUILD_COMMIT=\$VCS_REF/);
+  assert.match(dockerfile, /ENV KIROMAIL_BUILD_DATE=\$BUILD_DATE/);
   assert.doesNotMatch(deployWorkflow, /VPS_|ssh /);
   assert.match(updateScript, /\[0-9a-f\]\{40\}/);
   assert.match(updateScript, /sha256sum --check/);
