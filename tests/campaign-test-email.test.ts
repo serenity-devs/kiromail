@@ -8,5 +8,5 @@ test("an existing campaign test uses its pinned content snapshot", () => {
 
   assert.match(editor, /campaign && !templateChanged[\s\S]*campaign_id: campaign\.id/);
   assert.match(service, /SELECT c\.html_content,c\.text_content,'marketing' AS channel/);
-  assert.match(service, /WHERE c\.id=\$\{input\.campaignId\}/);
+  assert.match(service, /WHERE c\.id=\$\{campaignId\}/);
 });
