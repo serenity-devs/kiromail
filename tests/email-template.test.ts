@@ -13,6 +13,13 @@ test("visual email compiler rejects unsafe link protocols",()=>{
   const html=compileVisualEmail([{id:"cta",type:"button",content:"No",url:"javascript:alert(1)"}]);assert.doesNotMatch(html,/javascript:/);assert.match(html,/href="#"/);
 });
 
+test("visual email compiler preserves safe linked images",()=>{
+  const html=compileVisualEmail([{id:"hero",type:"image",content:"",url:"https://img.example.com/hero.png",link_url:"https://example.com/news",alt:"Portada"}]);
+  assert.match(html,/href="https:\/\/example\.com\/news"/);
+  assert.match(html,/src="https:\/\/img\.example\.com\/hero\.png"/);
+  assert.match(html,/alt="Portada"/);
+});
+
 test("template diagnostics report accessibility, compatibility and clipping risks",()=>{
   const html=`<div style="display:grid"><img src="http://example.com/a.png"><a href="#">Vacío</a>${"x".repeat(103000)}</div>`;
   const diagnostics=templateDiagnostics({subject:"Asunto",html_content:html,text_content:"Texto",variables_schema:{}});const codes=diagnostics.warnings.map(item=>item.code);

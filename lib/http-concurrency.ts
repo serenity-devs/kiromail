@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 export type ResourceVersion = number | string;
+export type VersionedJsonOptions = { cache?: "revalidate" | "no-store" };
 
 export class HttpPreconditionError extends Error {
   constructor(
@@ -69,11 +70,16 @@ export function versionedJson(
   id: string,
   version: ResourceVersion,
   status = 200,
+  options: VersionedJsonOptions = {},
 ) {
   const etag = resourceEtag(resource, id, version);
-  const headers = { ETag: etag, "Cache-Control": "private, no-cache" };
+  const noStore = options.cache === "no-store";
+  const headers = {
+    ETag: etag,
+    "Cache-Control": noStore ? "no-store" : "private, no-cache",
+  };
   const validators = request.headers.get("if-none-match")?.split(",").map(value => value.trim()) ?? [];
-  if ((request.method === "GET" || request.method === "HEAD") && (validators.includes(etag) || validators.includes("*"))) {
+  if (!noStore && (request.method === "GET" || request.method === "HEAD") && (validators.includes(etag) || validators.includes("*"))) {
     return new NextResponse(null, { status: 304, headers });
   }
   return NextResponse.json({ ...body, etag }, { status, headers });

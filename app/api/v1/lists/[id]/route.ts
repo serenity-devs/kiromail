@@ -35,7 +35,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
     WHERE t.list_id=${id} AND t.status<>'archived'
   `;
   const [stats] = await sql`SELECT count(*) FILTER (WHERE status='active')::int AS active, count(*) FILTER (WHERE status='unsubscribed')::int AS unsubscribed, count(*)::int AS total FROM subscriptions WHERE list_id=${id}`;
-  return versionedJson(request, { ...list, fields:fields.map(field=>{const key=String(field.key);return {...field,etag:resourceEtag("list-field",`${id}/${field.id}`,field.revision),dependencies:{segments:segments.filter(segment=>segmentUsesListField(segment.definition,key)).map(({id:segmentId,name,status})=>({id:segmentId,name,status})),import_jobs:imports.filter(job=>importUsesListField(job.input,id,key)).length,templates:templates.filter(template=>templateUsesListField(template.content,key)).map(({id:templateId,name})=>({id:templateId,name}))}}}), stats }, "list", id, list.revision);
+  return versionedJson(request, { ...list, fields:fields.map(field=>{const key=String(field.key);return {...field,etag:resourceEtag("list-field",`${id}/${field.id}`,field.revision),dependencies:{segments:segments.filter(segment=>segmentUsesListField(segment.definition,key)).map(({id:segmentId,name,status})=>({id:segmentId,name,status})),import_jobs:imports.filter(job=>importUsesListField(job.input,id,key)).length,templates:templates.filter(template=>templateUsesListField(template.content,key)).map(({id:templateId,name})=>({id:templateId,name}))}}}), stats }, "list", id, list.revision, 200, { cache: "no-store" });
 }
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
