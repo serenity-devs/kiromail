@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildTrackedHtml, personalize } from "../lib/email";
+import { buildMarketingTestHtml, buildTrackedHtml, personalize } from "../lib/email";
 
 test("personalize replaces known values and clears unknown ones", () => {
   assert.equal(personalize("Hola {{ first_name }} desde {{city}} {{unknown}}", { first_name: "Ana", city: "Madrid" }), "Hola Ana desde Madrid ");
@@ -23,4 +23,18 @@ test("campaign footer accepts opaque unsubscribe and preference links", () => {
   assert.match(html, /https:\/\/mail\.example\/preferences\/opaque/);
   assert.match(html, /Gestionar preferencias/);
   assert.doesNotMatch(html, /\/t\/open\//);
+});
+
+test("marketing test email has the real footer without tracking or actionable recipient tokens", () => {
+  const html = buildMarketingTestHtml({
+    html: "<p>Mensaje de prueba</p>",
+    email: "ana@example.com",
+    physicalAddress: "Calle Mayor 1, Madrid",
+  });
+  assert.match(html, /Calle Mayor 1, Madrid/);
+  assert.match(html, />Darme de baja<\/a>/);
+  assert.match(html, />Gestionar preferencias<\/a>/);
+  assert.match(html, /\/unsubscribe\/test-preview/);
+  assert.match(html, /\/preferences\/test-preview/);
+  assert.doesNotMatch(html, /\/t\/(open|click)\//);
 });

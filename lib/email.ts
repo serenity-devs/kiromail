@@ -34,6 +34,20 @@ export function buildTrackedHtml(input: {
   return `${html}${footer}${pixel}`;
 }
 
+export function buildMarketingTestHtml(input: { html: string; email: string; physicalAddress: string }) {
+  return buildTrackedHtml({
+    html: input.html,
+    recipientId: "test-preview",
+    email: input.email,
+    campaignId: "test-preview",
+    physicalAddress: input.physicalAddress,
+    trackOpens: false,
+    trackClicks: false,
+    unsubscribeUrl: `${env.appUrl}/unsubscribe/test-preview`,
+    preferencesUrl: `${env.appUrl}/preferences/test-preview`,
+  });
+}
+
 export function eventKey(payload: unknown) {
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
 }

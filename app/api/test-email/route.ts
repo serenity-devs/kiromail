@@ -4,7 +4,10 @@ import { sendTestEmail } from "@/lib/campaign-service";
 import { apiError, requireApiSession } from "@/lib/http";
 import { headerText } from "@/lib/validation";
 
-const schema = z.object({ template_id: z.string().uuid(), email: z.email(), subject: headerText(1,998), from_name: headerText(1,200), from_email: z.email(), reply_to: z.union([z.email(), z.literal("")]) });
+const schema = z.object({
+  template_id: z.string().uuid(), email: z.email(), subject: headerText(1,998),
+  from_name: headerText(1,200).optional(), from_email: z.email().optional(), reply_to: z.union([z.email(), z.literal("")]).optional(),
+});
 
 export async function POST(request: Request) {
   const unauthorized = await requireApiSession("templates:write"); if (unauthorized) return unauthorized;

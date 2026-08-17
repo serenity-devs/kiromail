@@ -4,7 +4,7 @@ import nodemailer from "nodemailer";
 import { sql } from "./db";
 import { env } from "./config";
 import { buildSegmentFilter, type SegmentGroup, type SegmentParameter, type SegmentRule } from "./segments";
-import { buildTrackedHtml, eventKey, personalize } from "./email";
+import { buildMarketingTestHtml, buildTrackedHtml, eventKey, personalize } from "./email";
 import { getEmailQueue } from "./queue";
 import { storeContent } from "./content-storage";
 import { issuePublicToken } from "./public-preferences";
@@ -496,19 +496,29 @@ export async function sendRecipient(recipientId: string) {
   return { messageId };
 }
 
-export async function sendTestEmail(input: { templateId: string; email: string; subject: string; fromName: string; fromEmail: string; replyTo: string }) {
-  await assertSendingAvailable(input.fromEmail);
-  const [row] = await sql<{ html_content: string; text_content: string; ses_configuration_set: string; mail_transport: "smtp" | "ses";aws_region:string }[]>`
+export async function sendTestEmail(input: { templateId: string; email: string; subject: string; fromName?: string; fromEmail?: string; replyTo?: string }) {
+  const settings = await assertSendingAvailable(input.fromEmail);
+  const fromName = input.fromName?.trim() || settings.default_from_name;
+  const fromEmail = input.fromEmail?.trim() || settings.default_from_email;
+  const replyTo = input.replyTo === undefined ? settings.default_reply_to : input.replyTo;
+  const [row] = await sql<{ html_content: string; text_content: string; channel: "marketing" | "transactional"; physical_address: string; ses_configuration_set: string; mail_transport: "smtp" | "ses";aws_region:string }[]>`
     SELECT COALESCE(v.html_content,t.html_content) AS html_content,
       COALESCE(v.text_content,t.text_content) AS text_content,
-      COALESCE(NULLIF(s.ses_marketing_configuration_set,''),s.ses_configuration_set) AS ses_configuration_set,
+      t.channel,s.physical_address,
+      CASE WHEN t.channel='transactional'
+        THEN COALESCE(NULLIF(s.ses_transactional_configuration_set,''),s.ses_configuration_set)
+        ELSE COALESCE(NULLIF(s.ses_marketing_configuration_set,''),s.ses_configuration_set)
+      END AS ses_configuration_set,
       s.mail_transport,s.aws_region
     FROM templates t LEFT JOIN template_versions v ON v.id=t.published_version_id CROSS JOIN settings s WHERE t.id=${input.templateId}
   `;
   if (!row) throw new Error("La plantilla ya no existe");
   const sample = { first_name: "Prueba", last_name: "KiroMail", full_name: "Prueba KiroMail", email: input.email, city: "Madrid", country: "España" };
   const subject = personalize(input.subject, sample);
-  const html = personalize(row.html_content, sample);
+  const personalizedHtml = personalize(row.html_content, sample);
+  const html = row.channel === "marketing"
+    ? buildMarketingTestHtml({ html: personalizedHtml, email: input.email, physicalAddress: row.physical_address })
+    : personalizedHtml;
   const text = personalize(row.text_content, sample) || subject;
   const selectedTransport: "smtp" | "ses" =
     env.mailTransport === "smtp" || env.mailTransport === "ses"
@@ -518,12 +528,12 @@ export async function sendTestEmail(input: { templateId: string; email: string; 
   let providerMessageId = "";
   if (selectedTransport === "ses") {
     const response = await ses(region).send(new SendEmailCommand({
-      FromEmailAddress: `${input.fromName} <${input.fromEmail}>`,
+      FromEmailAddress: `${fromName} <${fromEmail}>`,
       Destination: { ToAddresses: [input.email] },
-      ReplyToAddresses: input.replyTo ? [input.replyTo] : undefined,
+      ReplyToAddresses: replyTo ? [replyTo] : undefined,
       ConfigurationSetName: row.ses_configuration_set || undefined,
       EmailTags: [
-        { Name: "channel", Value: "marketing" },
+        { Name: "channel", Value: row.channel },
         { Name: "message_type", Value: "campaign_test" },
         { Name: "template_id", Value: input.templateId },
       ],
@@ -531,7 +541,7 @@ export async function sendTestEmail(input: { templateId: string; email: string; 
     }));
     providerMessageId = response.MessageId ?? "";
   } else {
-    const response = await smtp().sendMail({ from: `${input.fromName} <${input.fromEmail}>`, to: input.email, replyTo: input.replyTo || undefined, subject: `[PRUEBA] ${subject}`, html, text, headers: { "X-KiroMail-Test": "true" } });
+    const response = await smtp().sendMail({ from: `${fromName} <${fromEmail}>`, to: input.email, replyTo: replyTo || undefined, subject: `[PRUEBA] ${subject}`, html, text, headers: { "X-KiroMail-Test": "true" } });
     providerMessageId = response.messageId;
   }
   const result = {
