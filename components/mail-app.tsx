@@ -11917,9 +11917,15 @@ function SegmentTypedValue({
     ].includes(rule.field) || ["date", "datetime"].includes(field?.type ?? "");
   const numeric = ["integer", "decimal"].includes(field?.type ?? "");
   return (
-    <span className="rule-values">
+    <span
+      className={`rule-values${dateField && rule.operator === "between" ? " date-range-values" : ""}`}
+    >
       <input
-        aria-label="Valor"
+        aria-label={
+          dateField && rule.operator === "between"
+            ? "Fecha inicial incluida"
+            : "Valor"
+        }
         type={dateField ? "date" : numeric ? "number" : "text"}
         step={field?.type === "decimal" ? "any" : undefined}
         value={String(rule.value ?? "")}
@@ -11935,9 +11941,10 @@ function SegmentTypedValue({
       />
       {rule.operator === "between" && (
         <input
-          aria-label="Valor final"
+          aria-label={dateField ? "Fecha final incluida" : "Valor final"}
           type={dateField ? "date" : "number"}
           step={field?.type === "decimal" ? "any" : undefined}
+          required
           value={String(rule.value_to ?? "")}
           onChange={(event) =>
             patch({
@@ -11949,6 +11956,9 @@ function SegmentTypedValue({
           }
           placeholder="Hasta"
         />
+      )}
+      {dateField && rule.operator === "between" && (
+        <small>Ambas fechas están incluidas.</small>
       )}
     </span>
   );

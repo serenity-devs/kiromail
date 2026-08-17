@@ -49,3 +49,13 @@ test("segment editor loads and exposes every active field from the selected list
   assert.match(segmentEditor, /segmentListFieldPrefix/);
   assert.doesNotMatch(segmentEditor, /aria-label="Campo propio"/);
 });
+
+test("segment date ranges explain that both dates are included", () => {
+  const segmentEditor = app.slice(
+    app.indexOf("function SegmentModal"),
+    app.indexOf("function CampaignModal"),
+  );
+  assert.match(segmentEditor, /Ambas fechas están incluidas\./);
+  assert.match(segmentEditor, /Fecha inicial incluida/);
+  assert.match(segmentEditor, /Fecha final incluida/);
+});

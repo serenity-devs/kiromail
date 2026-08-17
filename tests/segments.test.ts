@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildSegmentFilter } from "../lib/segments";
+import { buildSegmentFilter, explainSegment } from "../lib/segments";
 
 test("segment filters parameterize values", () => {
   const result = buildSegmentFilter([{ field: "email", operator: "contains", value: "example.com" }, { field: "status", operator: "is", value: "active" }], "all");
@@ -40,4 +40,21 @@ test("negative campaign activity negates the whole time-windowed existence check
   assert.deepEqual(result.values,["campaign-id",14]);
   assert.match(result.where,/NOT \(EXISTS/);
   assert.match(result.where,/clicked_at>=now\(\)-\(\$2::int\*interval '1 day'\)/);
+});
+
+test("date-only between ranges include both complete calendar dates",()=>{
+  const result=buildSegmentFilter([{kind:"rule",field:"created_at",operator:"between",value:"2026-08-01",value_to:"2026-08-17"}]);
+  assert.deepEqual(result.values,["2026-08-01","2026-08-17"]);
+  assert.match(result.where,/::timestamptz::date BETWEEN \$1::date AND \$2::date/);
+});
+
+test("between ranges with timestamps preserve exact inclusive bounds",()=>{
+  const result=buildSegmentFilter([{kind:"rule",field:"created_at",operator:"between",value:"2026-08-01T12:00:00Z",value_to:"2026-08-17T18:00:00Z"}]);
+  assert.deepEqual(result.values,["2026-08-01T12:00:00Z","2026-08-17T18:00:00Z"]);
+  assert.match(result.where,/::timestamptz BETWEEN \$1::timestamptz AND \$2::timestamptz/);
+});
+
+test("date range explanations show both inclusive dates",()=>{
+  const explanation=explainSegment({kind:"rule",field:"created_at",operator:"between",value:"2026-08-01",value_to:"2026-08-17"});
+  assert.equal(explanation,"created_at between 2026-08-01 y 2026-08-17 (ambas fechas incluidas)");
 });

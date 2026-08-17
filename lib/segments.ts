@@ -38,7 +38,12 @@ export function buildSegmentFilter(definition:SegmentGroup|SegmentRule[],matchTy
   const comparableClause=(expression:string,cast:"numeric"|"timestamptz",rule:SegmentRule)=>{
     if(rule.operator==="is_empty")return`${expression} IS NULL OR ${expression}=''`;if(rule.operator==="not_empty")return`${expression} IS NOT NULL AND ${expression}<>''`;
     const first=bind(rule.value??"");const operators:Record<string,string>={is:"=",is_not:"<>",greater_than:">",greater_or_equal:">=",less_than:"<",less_or_equal:"<=",before:"<",after:">"};
-    if(rule.operator==="between"){const second=bind(rule.value_to??"");return`NULLIF(${expression},'')::${cast} BETWEEN ${first}::${cast} AND ${second}::${cast}`;}
+    if(rule.operator==="between"){
+      const second=bind(rule.value_to??"");
+      const isDateOnlyRange=cast==="timestamptz"&&typeof rule.value==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(rule.value)&&typeof rule.value_to==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(rule.value_to);
+      if(isDateOnlyRange)return`NULLIF(${expression},'')::timestamptz::date BETWEEN ${first}::date AND ${second}::date`;
+      return`NULLIF(${expression},'')::${cast} BETWEEN ${first}::${cast} AND ${second}::${cast}`;
+    }
     const operator=operators[rule.operator];if(!operator)throw new Error(`Operador ${rule.operator} no válido para ${cast}`);return`NULLIF(${expression},'')::${cast} ${operator} ${first}::${cast}`;
   };
   const compileRule=(rule:SegmentRule):string=>{
@@ -71,5 +76,5 @@ export function buildSegmentFilter(definition:SegmentGroup|SegmentRule[],matchTy
 
 export function explainSegment(node:SegmentNode):string{
   if(isGroup(node)){const parts=node.children.map(explainSegment);return`${node.match==="all"?"Todas":"Cualquiera"}: ${parts.join(node.match==="all"?" Y ":" O ")}`;}
-  const field=node.field==="list_field"?(node.field_key??"campo de lista"):node.field;const value=Array.isArray(node.value)?node.value.join(", "):String(node.value??"");const window=node.field==="campaign_activity"&&node.within_days?` en los últimos ${node.within_days} días`:"";return`${field} ${node.operator}${value?` ${value}`:""}${window}`;
+  const field=node.field==="list_field"?(node.field_key??"campo de lista"):node.field;const value=Array.isArray(node.value)?node.value.join(", "):String(node.value??"");const valueTo=node.operator==="between"&&node.value_to!=null?` y ${node.value_to}`:"";const dateField=["created_at","last_activity_at","subscribed_at","confirmed_at","unsubscribed_at"].includes(node.field)||["date","datetime"].includes(node.field_type??"");const inclusive=node.operator==="between"&&dateField?" (ambas fechas incluidas)":"";const window=node.field==="campaign_activity"&&node.within_days?` en los últimos ${node.within_days} días`:"";return`${field} ${node.operator}${value?` ${value}`:""}${valueTo}${inclusive}${window}`;
 }
