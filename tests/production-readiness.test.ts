@@ -17,6 +17,10 @@ const queueSource = readFileSync("lib/queue.ts", "utf8");
 const demoSeed = readFileSync("scripts/seed.ts", "utf8");
 const productionGuide = readFileSync("docs/produccion.md", "utf8");
 const readme = readFileSync("README.md", "utf8");
+const registrationDateMigration = readFileSync(
+  "db/migrations/031_list_registration_date_column.sql",
+  "utf8",
+);
 
 test("production bootstrap never invokes demo data", () => {
   assert.equal(
@@ -38,6 +42,18 @@ test("server deployment gates startup on liveness and preserves readiness for on
   assert.match(serverCompose, /api\/health\/live/);
   assert.doesNotMatch(serverCompose, /fetch\('http:\/\/127\.0\.0\.1:3000\/api\/health\/ready'/);
   assert.match(productionGuide, /readiness sigue siendo el control de\s+lanzamiento/);
+});
+
+test("registration date migration relaxes the old constraint before updating rows", () => {
+  const dropConstraint = registrationDateMigration.indexOf(
+    "DROP CONSTRAINT IF EXISTS lists_subscriber_table_columns_check",
+  );
+  const updateRows = registrationDateMigration.indexOf(
+    "SET subscriber_table_columns = array_append",
+  );
+  assert.ok(dropConstraint >= 0);
+  assert.ok(updateRows >= 0);
+  assert.ok(dropConstraint < updateRows);
 });
 
 test("shared-server deployment never binds public ports or builds on the VPS", () => {

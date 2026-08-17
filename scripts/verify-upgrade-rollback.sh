@@ -70,6 +70,8 @@ FROM new_contact CROSS JOIN new_list;
 SQL
 
 "${postgres[@]}" createdb -U kiromail --template="${test_db}" "${snapshot_db}"
+snapshot_revision_columns="$("${postgres[@]}" psql -At -v ON_ERROR_STOP=1 -U kiromail -d "${snapshot_db}" -c \
+  "SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='contacts' AND column_name='revision'")"
 apply_migration "${test_db}" "${latest_migration}"
 
 post_upgrade="$("${postgres[@]}" psql -At -v ON_ERROR_STOP=1 -U kiromail -d "${test_db}" -c \
@@ -94,7 +96,7 @@ fi
 
 restored="$("${postgres[@]}" psql -At -v ON_ERROR_STOP=1 -U kiromail -d "${test_db}" -c \
   "SELECT (SELECT count(*) FROM contacts WHERE email='upgrade-sentinel@example.test') || ':' || (SELECT count(*) FROM subscriptions WHERE source='upgrade_rehearsal') || ':' || (SELECT count(*) FROM schema_migrations WHERE name='${latest_name}') || ':' || (SELECT count(*) FROM information_schema.columns WHERE table_schema='public' AND table_name='contacts' AND column_name='revision')")"
-if [[ "${restored}" != "1:1:0:0" ]]; then
+if [[ "${restored}" != "1:1:0:${snapshot_revision_columns}" ]]; then
   echo "La restauración del estado anterior no coincide con el snapshot: ${restored}" >&2
   exit 1
 fi
