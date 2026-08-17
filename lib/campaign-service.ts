@@ -4,7 +4,7 @@ import nodemailer from "nodemailer";
 import { sql } from "./db";
 import { env } from "./config";
 import { buildSegmentFilter, type SegmentGroup, type SegmentParameter, type SegmentRule } from "./segments";
-import { buildMarketingTestHtml, buildTrackedHtml, eventKey, personalize } from "./email";
+import { buildTrackedHtml, eventKey, personalize, withCampaignTemplateVariables } from "./email";
 import { getEmailQueue } from "./queue";
 import { storeContent } from "./content-storage";
 import { issuePublicToken } from "./public-preferences";
@@ -381,8 +381,6 @@ export async function sendRecipient(recipientId: string) {
   `;
 
   const subject = personalize(row.subject, row.personalization);
-  const rawHtml = personalize(row.html_content, row.personalization);
-  const text = personalize(row.text_content, row.personalization);
   const selectedTransport = env.mailTransport || row.configured_transport;
   const [unsubscribeAccess,preferenceAccess]=row.contact_id&&row.subscription_id?await Promise.all([
     issuePublicToken({purpose:"unsubscribe",contactId:row.contact_id,subscriptionId:row.subscription_id,listId:row.list_id,expiresInDays:365,detail:{campaign_id:row.campaign_id,recipient_id:row.recipient_id}}),
@@ -390,12 +388,14 @@ export async function sendRecipient(recipientId: string) {
   ]):[null,null];
   const unsubscribeUrl=unsubscribeAccess?`${env.appUrl}/unsubscribe/${encodeURIComponent(unsubscribeAccess.token)}`:undefined;
   const preferencesUrl=preferenceAccess?`${env.appUrl}/preferences/${encodeURIComponent(preferenceAccess.token)}`:undefined;
+  const templateVariables = withCampaignTemplateVariables(row.personalization, {
+    unsubscribeUrl, preferencesUrl, physicalAddress: row.physical_address,
+  });
+  const rawHtml = personalize(row.html_content, templateVariables);
+  const text = personalize(row.text_content, templateVariables);
   const html = buildTrackedHtml({
     html: rawHtml,
     recipientId,
-    email: row.email,
-    campaignId: row.campaign_id,
-    physicalAddress: row.physical_address,
     trackOpens: row.track_opens&&(selectedTransport!=="ses"||row.ses_tracking_source==="local"),
     trackClicks: row.track_clicks&&(selectedTransport!=="ses"||row.ses_tracking_source==="local"),
     unsubscribeUrl,
@@ -513,12 +513,16 @@ export async function sendTestEmail(input: { templateId: string; email: string; 
     FROM templates t LEFT JOIN template_versions v ON v.id=t.published_version_id CROSS JOIN settings s WHERE t.id=${input.templateId}
   `;
   if (!row) throw new Error("La plantilla ya no existe");
-  const sample = { first_name: "Prueba", last_name: "KiroMail", full_name: "Prueba KiroMail", email: input.email, city: "Madrid", country: "España" };
+  const sample = withCampaignTemplateVariables(
+    { first_name: "Prueba", last_name: "KiroMail", full_name: "Prueba KiroMail", email: input.email, city: "Madrid", country: "España" },
+    {
+      unsubscribeUrl: row.channel === "marketing" ? `${env.appUrl}/unsubscribe/test-preview` : undefined,
+      preferencesUrl: row.channel === "marketing" ? `${env.appUrl}/preferences/test-preview` : undefined,
+      physicalAddress: row.physical_address,
+    },
+  );
   const subject = personalize(input.subject, sample);
-  const personalizedHtml = personalize(row.html_content, sample);
-  const html = row.channel === "marketing"
-    ? buildMarketingTestHtml({ html: personalizedHtml, email: input.email, physicalAddress: row.physical_address })
-    : personalizedHtml;
+  const html = personalize(row.html_content, sample);
   const text = personalize(row.text_content, sample) || subject;
   const selectedTransport: "smtp" | "ses" =
     env.mailTransport === "smtp" || env.mailTransport === "ses"

@@ -17,6 +17,8 @@ export type TemplateVersion = {
   published_at: Date | null;
 };
 
+const campaignVariables = new Set(["unsubscribe_url", "preferences_url", "physical_address"]);
+
 export function templateDiagnostics(version: Pick<TemplateVersion, "subject" | "html_content" | "text_content" | "variables_schema">) {
   const errors: { code: string; message: string }[] = [];
   const warnings: { code: string; message: string }[] = [];
@@ -26,7 +28,7 @@ export function templateDiagnostics(version: Pick<TemplateVersion, "subject" | "
     errors.push({ code: "unsafe_html", message: "El HTML contiene elementos o atributos peligrosos" });
   }
   const used = new Set([...`${version.subject} ${version.html_content} ${version.text_content}`.matchAll(/{{\s*([a-zA-Z0-9_]+)\s*}}/g)].map((match) => match[1]));
-  for (const key of used) if (!(key in (version.variables_schema ?? {}))) warnings.push({ code: "variable_undocumented", message: `La variable ${key} no está declarada` });
+  for (const key of used) if (!campaignVariables.has(key) && !(key in (version.variables_schema ?? {}))) warnings.push({ code: "variable_undocumented", message: `La variable ${key} no está declarada` });
   if (!version.text_content.trim()) warnings.push({ code: "text_missing", message: "El texto plano se generará al enviar" });
   const html=version.html_content;
   for(const match of html.matchAll(/<img\b([^>]*)>/gi)){const attributes=match[1];if(!/\balt\s*=\s*["'][^"']*["']/i.test(attributes))warnings.push({code:"image_alt_missing",message:"Hay una imagen sin atributo alt"});}

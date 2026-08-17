@@ -25,3 +25,13 @@ test("template diagnostics report accessibility, compatibility and clipping risk
   const diagnostics=templateDiagnostics({subject:"Asunto",html_content:html,text_content:"Texto",variables_schema:{}});const codes=diagnostics.warnings.map(item=>item.code);
   assert.ok(codes.includes("image_alt_missing"));assert.ok(codes.includes("link_empty"));assert.ok(codes.includes("resource_http"));assert.ok(codes.includes("client_compatibility"));assert.ok(codes.includes("gmail_clip_risk"));
 });
+
+test("campaign footer variables are reserved and need no custom declaration",()=>{
+  const diagnostics=templateDiagnostics({
+    subject:"Asunto",
+    html_content:'<h1>Hola</h1><p>{{physical_address}}</p><a href="{{unsubscribe_url}}">Baja</a><a href="{{preferences_url}}">Preferencias</a>',
+    text_content:"Baja: {{unsubscribe_url}}",
+    variables_schema:{},
+  });
+  assert.equal(diagnostics.warnings.some(item=>item.code==="variable_undocumented"),false);
+});
