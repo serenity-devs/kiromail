@@ -10,6 +10,8 @@ import { storeContent } from "./content-storage";
 import { issuePublicToken } from "./public-preferences";
 import { advanceCampaignExperiment,buildExperimentAssignments,getCampaignExperimentSetup,markExperimentSampling } from "./campaign-experiments";
 import { assertSendingAvailable, senderIsAllowed } from "./deliverability";
+import { meaningfulCampaignOpenPredicate,nonOpenerCampaignTargetPredicate } from "./campaign-targeting";
+import type { TestEmailResult } from "./test-email";
 
 type CampaignRow = {
   id: string;
@@ -19,7 +21,7 @@ type CampaignRow = {
   from_name: string;
   from_email: string;
   reply_to: string;
-  target_type: "all" | "list" | "tag" | "segment";
+  target_type: "all" | "list" | "tag" | "segment" | "non_openers";
   target_id: string | null;
   list_id: string | null;
   template_id: string | null;
@@ -59,6 +61,9 @@ async function targetContacts(campaign: CampaignRow) {
 
   if (campaign.target_type === "tag" && campaign.target_id) {
     extra = "EXISTS (SELECT 1 FROM contact_tags ct WHERE ct.contact_id = c.id AND ct.tag_id::text = $2)";
+    values = [campaign.target_id];
+  } else if (campaign.target_type === "non_openers" && campaign.target_id) {
+    extra = nonOpenerCampaignTargetPredicate("$2");
     values = [campaign.target_id];
   } else if (campaign.target_type === "segment" && campaign.target_id) {
     const [segment] = await sql<{ rules: SegmentRule[]; definition:SegmentGroup;list_id:string|null;match_type: "all" | "any" }[]>`
@@ -505,20 +510,39 @@ export async function sendTestEmail(input: { templateId: string; email: string; 
   const subject = personalize(input.subject, sample);
   const html = personalize(row.html_content, sample);
   const text = personalize(row.text_content, sample) || subject;
-  const selectedTransport = env.mailTransport || row.mail_transport;
+  const selectedTransport: "smtp" | "ses" =
+    env.mailTransport === "smtp" || env.mailTransport === "ses"
+      ? env.mailTransport
+      : row.mail_transport;
+  const region = env.awsRegion ?? row.aws_region;
+  let providerMessageId = "";
   if (selectedTransport === "ses") {
-    await ses(env.awsRegion??row.aws_region).send(new SendEmailCommand({
+    const response = await ses(region).send(new SendEmailCommand({
       FromEmailAddress: `${input.fromName} <${input.fromEmail}>`,
       Destination: { ToAddresses: [input.email] },
       ReplyToAddresses: input.replyTo ? [input.replyTo] : undefined,
       ConfigurationSetName: row.ses_configuration_set || undefined,
+      EmailTags: [
+        { Name: "channel", Value: "marketing" },
+        { Name: "message_type", Value: "campaign_test" },
+        { Name: "template_id", Value: input.templateId },
+      ],
       Content: { Simple: { Subject: { Data: `[PRUEBA] ${subject}`, Charset: "UTF-8" }, Body: { Html: { Data: html, Charset: "UTF-8" }, Text: { Data: text, Charset: "UTF-8" } } } },
     }));
+    providerMessageId = response.MessageId ?? "";
   } else {
-    await smtp().sendMail({ from: `${input.fromName} <${input.fromEmail}>`, to: input.email, replyTo: input.replyTo || undefined, subject: `[PRUEBA] ${subject}`, html, text, headers: { "X-KiroMail-Test": "true" } });
+    const response = await smtp().sendMail({ from: `${input.fromName} <${input.fromEmail}>`, to: input.email, replyTo: input.replyTo || undefined, subject: `[PRUEBA] ${subject}`, html, text, headers: { "X-KiroMail-Test": "true" } });
+    providerMessageId = response.messageId;
   }
-  await sql`INSERT INTO audit_log (action, entity_type, entity_id, detail) VALUES ('test_send', 'template', ${input.templateId}, ${sql.json({ email: input.email, transport: selectedTransport })})`;
-  return { sent: true };
+  const result = {
+    sent: true,
+    transport: selectedTransport,
+    region,
+    provider_message_id: providerMessageId,
+    status: selectedTransport === "ses" ? "provider_accepted" as const : "delivered" as const,
+  } satisfies TestEmailResult;
+  await sql`INSERT INTO audit_log (action, entity_type, entity_id, detail) VALUES ('test_send', 'template', ${input.templateId}, ${sql.json({ email: input.email, ...result })})`;
+  return result;
 }
 
 export async function markRecipientFailed(recipientId: string, error: Error) {
@@ -613,4 +637,42 @@ export async function estimateCampaignAudience(campaignId: string) {
     FROM subscriptions s JOIN contacts c ON c.id=s.contact_id WHERE s.list_id=${campaign.list_id}
   `;
   return { included: included.length, excluded: Math.max(0, totals.total - included.length), breakdown: totals, sample: included.slice(0,20).map(({ id,email,first_name,last_name }) => ({ id,email,first_name,last_name })) };
+}
+
+export async function getNonOpenerResendPreview(sourceCampaignId: string) {
+  const [source] = await sql<(CampaignRow & { name:string;sent_count:number;open_count:number;archived_at:Date|null;tracking_enabled:boolean })[]>`
+    SELECT c.*,
+      EXISTS(SELECT 1 FROM outbound_messages m WHERE m.campaign_id=c.id AND m.track_opens) AS tracking_enabled
+    FROM campaigns c WHERE c.id=${sourceCampaignId} AND c.archived_at IS NULL
+  `;
+  if (!source) return null;
+  const meaningfulOpen = meaningfulCampaignOpenPredicate("source_recipient");
+  const [stats] = await sql.unsafe<{ sent:number;opened:number }[]>(`
+    SELECT
+      count(*) FILTER(WHERE source_recipient.sent_at IS NOT NULL)::int AS sent,
+      count(*) FILTER(WHERE source_recipient.sent_at IS NOT NULL AND ${meaningfulOpen})::int AS opened
+    FROM campaign_recipients source_recipient
+    WHERE source_recipient.campaign_id=$1::uuid
+  `,[sourceCampaignId]);
+  const eligible = source.list_id
+    ? await targetContacts({ ...source,target_type:"non_openers",target_id:source.id })
+    : [];
+  const reason = source.status !== "completed"
+    ? "Solo se puede preparar el reenvío de una campaña completada"
+    : !source.tracking_enabled
+      ? "La campaña original no tenía seguimiento de aperturas"
+      : stats.sent === 0
+        ? "La campaña original no tiene envíos completados"
+        : eligible.length === 0
+          ? "No quedan destinatarios enviables sin apertura"
+          : null;
+  return {
+    available: reason === null,
+    eligible: eligible.length,
+    sent: stats.sent,
+    opened: stats.opened,
+    tracking_enabled: source.tracking_enabled,
+    reason,
+    source,
+  };
 }

@@ -27,7 +27,7 @@ export async function POST(request:Request){
       result=await reconcileSesSuppressions(input.mode??settings.ses_suppression_sync_mode);
     }else if(input.action==="set_sending_paused"){
       const[updated]=await sql`UPDATE settings SET global_sending_paused=${input.paused},updated_at=now() WHERE id=1 RETURNING global_sending_paused`;
-      if(!input.paused)await Promise.all([recoverQueuedRecipients(),recoverQueuedTransactionalMessages()]);
+      if(!input.paused)await Promise.all([recoverQueuedRecipients(),recoverQueuedTransactionalMessages({includeFresh:true})]);
       result=updated;
     }else{
       const[alert]=await sql`UPDATE operational_alerts SET status='resolved',resolved_at=now(),detail=detail||${sql.json({resolution_note:input.note} as never)} WHERE id=${input.alert_id} AND status='open' RETURNING *`;

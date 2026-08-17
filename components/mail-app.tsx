@@ -22,6 +22,10 @@ import {
   type PanelSection as Section,
 } from "@/lib/panel-navigation";
 import {
+  testEmailConfirmation,
+  type TestEmailResult,
+} from "@/lib/test-email";
+import {
   defaultUiTheme,
   normalizeUiTheme,
   uiThemes,
@@ -539,6 +543,7 @@ type TransactionalMessage = {
   delivered_at?: string;
   first_opened_at?: string;
   first_clicked_at?: string;
+  failure_code?: string;
   failure_reason?: string;
   created_at: string;
 };
@@ -978,8 +983,15 @@ const statusLabel: Record<string, string> = {
   queued: "En cola",
   processing: "Procesando",
   processed: "Procesado",
+  started: "Iniciado",
+  succeeded: "Correcto",
   sent: "Enviado",
+  provider_accepted: "Aceptado por el proveedor",
+  send_attempted: "Intento de envío",
+  retry_queued: "Reintento en cola",
   delivered: "Entregado",
+  delivery_delayed: "Entrega retrasada",
+  rejected: "Rechazado",
   delayed: "Retrasado",
   opened: "Abierto",
   clicked: "Clic",
@@ -996,6 +1008,34 @@ const statusLabel: Record<string, string> = {
   cancelled: "Cancelada",
   failed: "Con errores",
 };
+const failureCodeLabel: Record<string, string> = {
+  hard_bounce: "hard bounce",
+  soft_bounce_final: "soft bounce final",
+  undetermined_bounce: "rebote indeterminado",
+  delivery_delayed: "retraso de entrega",
+};
+
+function normalizedTransactionalEvent(event: TransactionalEvent) {
+  const normalized = event.payload?.normalized;
+  return normalized && typeof normalized === "object"
+    ? (normalized as Record<string, unknown>)
+    : null;
+}
+
+function transactionalEventLabel(event: TransactionalEvent) {
+  const normalized = normalizedTransactionalEvent(event);
+  if (event.type === "bounced") {
+    if (normalized?.bounce_class === "hard") return "Hard bounce · permanente";
+    if (normalized?.bounce_class === "soft") return "Soft bounce · reintentos agotados";
+    if (normalized?.bounce_class === "undetermined") return "Rebote indeterminado";
+  }
+  return statusLabel[event.type] ?? event.type;
+}
+
+function transactionalEventDetail(event: TransactionalEvent) {
+  const detail = normalizedTransactionalEvent(event)?.failure_reason;
+  return typeof detail === "string" ? detail : null;
+}
 const normalizeImportHeader = (value: string) =>
   value
     .normalize("NFD")
@@ -4365,8 +4405,10 @@ function TransactionalView({ data, refresh, notify }: ViewProps) {
             <option value="processing">Procesando</option>
             <option value="sent">Enviados</option>
             <option value="delivered">Entregados</option>
+            <option value="delayed">Retrasados</option>
             <option value="failed">Fallidos</option>
             <option value="bounced">Rebotes</option>
+            <option value="complained">Quejas</option>
           </select>
         </div>
         <div className="data-table-wrap">
@@ -4520,6 +4562,25 @@ function TransactionalView({ data, refresh, notify }: ViewProps) {
                         </span>
                       )}
                     </div>
+                    {selected.failure_reason && (
+                      <div className="info-callout">
+                        <CircleAlert size={17} />
+                        <p>
+                          <strong>
+                            {selected.status === "delayed"
+                              ? "Incidencia temporal"
+                              : selected.status === "queued"
+                                ? "Último intento"
+                                : "Motivo del fallo"}
+                          </strong>
+                          <br />
+                          {selected.failure_reason}
+                          {selected.failure_code
+                            ? ` · ${failureCodeLabel[selected.failure_code] ?? selected.failure_code}`
+                            : ""}
+                        </p>
+                      </div>
+                    )}
                     <div className="content-tabs">
                       <button
                         className={part === "html" ? "active" : ""}
@@ -4627,7 +4688,7 @@ function TransactionalView({ data, refresh, notify }: ViewProps) {
                             <i />
                             <div>
                               <strong>
-                                {statusLabel[event.type] ?? event.type}
+                                {transactionalEventLabel(event)}
                               </strong>
                               <span>
                                 {new Date(event.occurred_at).toLocaleString(
@@ -4636,6 +4697,9 @@ function TransactionalView({ data, refresh, notify }: ViewProps) {
                               </span>
                               {event.link_url && (
                                 <small>{event.link_url}</small>
+                              )}
+                              {transactionalEventDetail(event) && (
+                                <small>{transactionalEventDetail(event)}</small>
                               )}
                               <small>{event.source}</small>
                             </div>
@@ -4665,6 +4729,7 @@ function CampaignsView({
   const [reviewing, setReviewing] = useState<Campaign | null>(null);
   const [experimenting, setExperimenting] = useState<Campaign | null>(null);
   const [reporting, setReporting] = useState<Campaign | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
   const campaigns = data.campaigns.filter(
     (item) => filter === "all" || item.status === filter,
   );
@@ -4729,6 +4794,43 @@ function CampaignsView({
     });
     await refresh();
     notify("Campaña duplicada como borrador");
+  }
+  async function resendNonOpeners(campaign: Campaign) {
+    setResendingId(campaign.id);
+    try {
+      const preview = await api<{
+        available: boolean;
+        eligible: number;
+        sent: number;
+        opened: number;
+        reason: string | null;
+      }>(`/api/v1/campaigns/${campaign.id}/resend-non-openers`);
+      if (!preview.available)
+        throw new Error(preview.reason ?? "No se puede preparar el reenvío");
+      const recipients =
+        preview.eligible === 1 ? "1 destinatario" : `${preview.eligible} destinatarios`;
+      if (
+        !confirm(
+          `Se creará un borrador para ${recipients} que todavía no han abierto “${campaign.name}”. La audiencia se volverá a comprobar al enviarlo.`,
+        )
+      )
+        return;
+      const draft = await api<Campaign>(
+        `/api/v1/campaigns/${campaign.id}/resend-non-openers`,
+        { method: "POST", headers: { "Content-Type": "application/json" } },
+      );
+      await refresh();
+      setEditing({
+        ...draft,
+        template_name: campaign.template_name,
+        target_name: `No abiertos · ${campaign.name}`,
+      });
+      notify(`Borrador preparado para ${recipients}`);
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "No se pudo preparar el reenvío");
+    } finally {
+      setResendingId(null);
+    }
   }
   return (
     <>
@@ -4863,6 +4965,19 @@ function CampaignsView({
                               <Clock3 size={14} /> Pausar
                             </button>
                           )}
+                          {campaign.status === "completed" &&
+                            campaign.sent_count > 0 && (
+                              <button
+                                className="button button-small button-secondary"
+                                onClick={() => resendNonOpeners(campaign)}
+                                disabled={resendingId === campaign.id}
+                              >
+                                <RefreshCw size={14} />
+                                {resendingId === campaign.id
+                                  ? "Calculando…"
+                                  : "Reenviar a no abiertos"}
+                              </button>
+                            )}
                           {[
                             "pending_approval",
                             "scheduled",
@@ -11098,9 +11213,9 @@ const segmentFieldOptions = [
   ["subscribed_at", "Fecha de alta en lista"],
   ["confirmed_at", "Fecha de confirmación"],
   ["unsubscribed_at", "Fecha de baja"],
-  ["list_field", "Campo propio de la lista"],
   ["campaign_activity", "Actividad de campaña"],
 ] as const;
+const segmentListFieldPrefix = "list_field:";
 function segmentRoot(segment?: Segment): SegmentGroup {
   return segment?.definition?.children?.length
     ? segment.definition
@@ -11136,6 +11251,18 @@ function defaultSegmentRule(
   field = "email",
   listFields: ListField[] = [],
 ): SegmentRule {
+  if (field.startsWith(segmentListFieldPrefix)) {
+    const fieldKey = field.slice(segmentListFieldPrefix.length);
+    const selected = listFields.find((item) => item.key === fieldKey);
+    return {
+      kind: "rule",
+      field: "list_field",
+      field_key: selected?.key ?? "",
+      field_type: selected?.type ?? "text",
+      operator: selected?.type === "multiselect" ? "contains_any" : "is",
+      value: selected?.type === "multiselect" ? [] : "",
+    };
+  }
   if (field === "status")
     return { kind: "rule", field, operator: "is", value: "active" };
   if (
@@ -11265,6 +11392,8 @@ function SegmentModal({
     segmentRoot(segment),
   );
   const [listFields, setListFields] = useState<ListField[]>([]);
+  const [listFieldsLoading, setListFieldsLoading] = useState(true);
+  const [listFieldsError, setListFieldsError] = useState("");
   const [preview, setPreview] = useState<SegmentPreview>();
   const [previewError, setPreviewError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -11272,15 +11401,28 @@ function SegmentModal({
   useEffect(() => {
     if (!listId) return;
     let active = true;
-    api<ListDetail>(`/api/v1/lists/${listId}`)
+    api<{ data: ListField[] }>(`/api/v1/lists/${listId}/fields`)
       .then((result) => {
-        if (active)
+        if (active) {
           setListFields(
-            result.fields.filter((field) => field.status === "active"),
+            result.data
+              .filter((field) => field.status === "active")
+              .sort(
+                (left, right) =>
+                  left.position - right.position ||
+                  left.label.localeCompare(right.label, "es"),
+              ),
           );
+          setListFieldsError("");
+          setListFieldsLoading(false);
+        }
       })
       .catch(() => {
-        if (active) setListFields([]);
+        if (active) {
+          setListFields([]);
+          setListFieldsError("No se pudieron cargar los campos de la lista");
+          setListFieldsLoading(false);
+        }
       });
     return () => {
       active = false;
@@ -11371,7 +11513,12 @@ function SegmentModal({
             Lista
             <select
               value={listId}
-              onChange={(event) => setListId(event.target.value)}
+              onChange={(event) => {
+                setListId(event.target.value);
+                setListFields([]);
+                setListFieldsError("");
+                setListFieldsLoading(true);
+              }}
               required
             >
               {data.lists.map((item) => (
@@ -11380,6 +11527,14 @@ function SegmentModal({
                 </option>
               ))}
             </select>
+            <small>
+              {listFieldsLoading
+                ? "Cargando campos propios…"
+                : listFieldsError ||
+                  (listFields.length
+                    ? `${listFields.length} campos propios disponibles`
+                    : "Esta lista no tiene campos propios definidos")}
+            </small>
           </label>
           <label className="full">
             Descripción
@@ -11532,6 +11687,10 @@ function SegmentNodeEditor({
     (field) => field.key === rule.field_key,
   );
   const operators = operatorsFor(rule);
+  const fieldSelection =
+    rule.field === "list_field" && rule.field_key
+      ? `${segmentListFieldPrefix}${rule.field_key}`
+      : rule.field;
   function setField(field: string) {
     update(path, () => defaultSegmentRule(field, listFields));
   }
@@ -11542,39 +11701,39 @@ function SegmentNodeEditor({
     <div className="typed-rule-row">
       <select
         aria-label="Campo de condición"
-        value={rule.field}
+        value={fieldSelection}
         onChange={(event) => setField(event.target.value)}
       >
-        {segmentFieldOptions.map(([value, label]) => (
-          <option key={value} value={value}>
-            {label}
-          </option>
-        ))}
-      </select>
-      {rule.field === "list_field" && (
-        <select
-          aria-label="Campo propio"
-          value={rule.field_key ?? ""}
-          onChange={(event) => {
-            const field = listFields.find(
-              (item) => item.key === event.target.value,
-            );
-            patch({
-              field_key: field?.key ?? "",
-              field_type: field?.type ?? "text",
-              operator: field?.type === "multiselect" ? "contains_any" : "is",
-              value: field?.type === "multiselect" ? [] : "",
-            });
-          }}
-        >
-          <option value="">Selecciona un campo…</option>
-          {listFields.map((field) => (
-            <option value={field.key} key={field.id}>
-              {field.label} · {fieldTypeLabels[field.type] ?? field.type}
+        <optgroup label="Contacto y suscripción">
+          {segmentFieldOptions.map(([value, label]) => (
+            <option key={value} value={value}>
+              {label}
             </option>
           ))}
-        </select>
-      )}
+        </optgroup>
+        {rule.field === "list_field" && !rule.field_key && (
+          <option value="list_field" disabled>
+            Selecciona un campo propio…
+          </option>
+        )}
+        {rule.field === "list_field" && rule.field_key && !selectedField && (
+          <option value={fieldSelection} disabled>
+            Campo no disponible · {rule.field_key}
+          </option>
+        )}
+        {listFields.length > 0 && (
+          <optgroup label="Campos propios de la lista">
+            {listFields.map((field) => (
+              <option
+                value={`${segmentListFieldPrefix}${field.key}`}
+                key={field.id}
+              >
+                {field.label} · {fieldTypeLabels[field.type] ?? field.type}
+              </option>
+            ))}
+          </optgroup>
+        )}
+      </select>
       <select
         aria-label="Operador"
         value={rule.operator}
@@ -11805,13 +11964,20 @@ function CampaignModal({
   );
   const [testEmail, setTestEmail] = useState(data.settings.default_reply_to);
   const [testing, setTesting] = useState(false);
-  const [testDone, setTestDone] = useState(false);
+  const [testResult, setTestResult] = useState<TestEmailResult | null>(null);
+  const [templateChanged, setTemplateChanged] = useState(false);
   const [approvalRequired, setApprovalRequired] = useState(
     campaign?.approval_required ?? false,
   );
   const marketingTemplates = data.templates.filter(
     (item) => item.channel === "marketing",
   );
+  const initialTargetType =
+    campaign?.target_type === "segment"
+      ? "segment"
+      : campaign?.target_type === "non_openers"
+        ? "non_openers"
+        : "all";
   const [form, setForm] = useState({
     name: campaign?.name ?? "",
     subject: campaign?.subject ?? marketingTemplates[0]?.subject ?? "",
@@ -11824,7 +11990,7 @@ function CampaignModal({
       campaign?.template_id ??
       (!campaign ? (marketingTemplates[0]?.id ?? "") : ""),
     list_id: campaign?.list_id ?? data.lists[0]?.id ?? "",
-    target_type: campaign?.target_type === "segment" ? "segment" : "all",
+    target_type: initialTargetType,
     target_id: campaign?.target_id ?? "",
     scheduled_at: scheduledLocal,
   });
@@ -11837,8 +12003,7 @@ function CampaignModal({
         form.reply_to !== campaign.reply_to ||
         form.list_id !== campaign.list_id ||
         form.template_id !== (campaign.template_id ?? "") ||
-        form.target_type !==
-          (campaign.target_type === "segment" ? "segment" : "all") ||
+        form.target_type !== initialTargetType ||
         form.target_id !== (campaign.target_id ?? "")),
   );
   const currentApproval = Boolean(
@@ -11851,6 +12016,7 @@ function CampaignModal({
   }
   function selectTemplate(id: string) {
     const template = data.templates.find((item) => item.id === id);
+    setTemplateChanged(true);
     setForm((current) => ({
       ...current,
       template_id: id,
@@ -11861,12 +12027,15 @@ function CampaignModal({
   const targetOptions = data.segments.filter(
     (item) => !item.list_id || item.list_id === form.list_id,
   );
+  const sourceCampaign = data.campaigns.find(
+    (item) => item.id === form.target_id,
+  );
   async function sendTest() {
     setTesting(true);
-    setTestDone(false);
+    setTestResult(null);
     setError("");
     try {
-      await api("/api/test-email", {
+      const result = await api<TestEmailResult>("/api/test-email", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -11878,7 +12047,7 @@ function CampaignModal({
           reply_to: form.reply_to,
         }),
       });
-      setTestDone(true);
+      setTestResult(result);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error");
     } finally {
@@ -11899,10 +12068,12 @@ function CampaignModal({
         preview_text: form.preview_text,
         from: { name: form.from_name, email: form.from_email },
         reply_to: form.reply_to,
-        segment_id: form.target_type === "segment" ? form.target_id : null,
         approval_required: approvalRequired,
       };
-      if (selectedTemplate?.published_version_id)
+      if (form.target_type !== "non_openers")
+        payload.segment_id =
+          form.target_type === "segment" ? form.target_id : null;
+      if (selectedTemplate?.published_version_id && (!campaign || templateChanged))
         payload.template_version_id = selectedTemplate.published_version_id;
       if (campaign) payload.version = campaign.version;
       const saved = campaign
@@ -12096,9 +12267,10 @@ function CampaignModal({
                 >
                   {testing ? "Enviando…" : "Enviar prueba"}
                 </button>
-                {testDone && (
+                {testResult && (
                   <span>
-                    <CircleCheck size={15} /> Revisa Mailpit
+                    <CircleCheck size={15} />
+                    {testEmailConfirmation(testResult)}
                   </span>
                 )}
               </div>
@@ -12118,6 +12290,7 @@ function CampaignModal({
                 <select
                   value={form.list_id}
                   onChange={(e) => set("list_id", e.target.value)}
+                  disabled={form.target_type === "non_openers"}
                   required
                 >
                   <option value="">Selecciona una lista…</option>
@@ -12132,6 +12305,7 @@ function CampaignModal({
                 Audiencia dentro de la lista
                 <select
                   value={form.target_type}
+                  disabled={form.target_type === "non_openers"}
                   onChange={(e) => {
                     set("target_type", e.target.value);
                     set("target_id", "");
@@ -12139,6 +12313,11 @@ function CampaignModal({
                 >
                   <option value="all">Toda la lista activa</option>
                   <option value="segment">Aplicar un segmento</option>
+                  {form.target_type === "non_openers" && (
+                    <option value="non_openers">
+                      No abrieron la campaña original
+                    </option>
+                  )}
                 </select>
               </label>
               {form.target_type === "segment" && (
@@ -12159,6 +12338,17 @@ function CampaignModal({
                 </label>
               )}
             </div>
+            {form.target_type === "non_openers" && (
+              <div className="info-callout">
+                <RefreshCw size={17} />
+                <p>
+                  Solo se incluirán contactos que recibieron y no abrieron
+                  {sourceCampaign ? ` “${sourceCampaign.name}”` : " la campaña original"}.
+                  La audiencia se recalcula al lanzar el envío y respeta bajas,
+                  bloqueos y supresiones.
+                </p>
+              </div>
+            )}
             <label className="approval-toggle">
               <input
                 type="checkbox"
@@ -12254,6 +12444,8 @@ function CampaignModal({
                     "Lista por elegir"}
                   {form.target_type === "segment"
                     ? ` · ${targetOptions.find((item) => item.id === form.target_id)?.name || "segmento por elegir"}`
+                    : form.target_type === "non_openers"
+                      ? ` · no abiertos de ${sourceCampaign?.name ?? "la campaña original"}`
                     : ""}
                 </small>
               </div>

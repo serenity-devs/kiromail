@@ -70,6 +70,7 @@ export async function getBootstrapData() {
         LEFT JOIN users u ON u.id=ac.user_id LEFT JOIN api_keys k ON k.id=ac.api_key_id
         WHERE ac.campaign_id=c.id ORDER BY ac.created_at DESC,ac.id DESC LIMIT 1) AS latest_approval_comment,
       CASE
+        WHEN c.target_type = 'non_openers' THEN 'No abiertos · ' || COALESCE((SELECT name FROM campaigns source WHERE source.id = c.target_id),'campaña original')
         WHEN c.list_id IS NOT NULL THEN (SELECT name FROM lists WHERE id = c.list_id)
         WHEN c.target_type = 'tag' THEN (SELECT name FROM tags WHERE id = c.target_id)
         WHEN c.target_type = 'segment' THEN (SELECT name FROM segments WHERE id = c.target_id)

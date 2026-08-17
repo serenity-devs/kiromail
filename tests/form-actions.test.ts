@@ -37,3 +37,15 @@ test("submit actions are explicit and entity creation recovers from errors", () 
   assert.match(entityModal, /setError\(/);
   assert.match(entityModal, /setSaving\(false\)/);
 });
+
+test("segment editor loads and exposes every active field from the selected list", () => {
+  const segmentEditor = app.slice(
+    app.indexOf("function SegmentModal"),
+    app.indexOf("function CampaignModal"),
+  );
+  assert.match(segmentEditor, /\/api\/v1\/lists\/\$\{listId\}\/fields/);
+  assert.match(segmentEditor, /result\.data[\s\S]*field\.status === "active"/);
+  assert.match(segmentEditor, /label="Campos propios de la lista"/);
+  assert.match(segmentEditor, /segmentListFieldPrefix/);
+  assert.doesNotMatch(segmentEditor, /aria-label="Campo propio"/);
+});

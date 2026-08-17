@@ -10,6 +10,11 @@ import { buildTransactionalTrackedHtml, eventKey, personalize, type Personalizat
 import { getTransactionalQueue } from "./queue";
 import { senderIsAllowed } from "./deliverability";
 import { assertMimeWithinLimit, buildTransactionalMime, type TransactionalMimeAttachment } from "./transactional-mime";
+import {
+  shouldRequeueTransactionalFailure,
+  transportAcceptanceEventType,
+  transportAcceptedStatus,
+} from "./transactional-lifecycle";
 
 export class TransactionalError extends Error {
   constructor(message: string, public status = 400, public code = "invalid_request") { super(message); }
@@ -204,6 +209,13 @@ export async function acceptTransactionalMessage(input: TransactionalSendInput, 
   `;
   if (existing) {
     if (existing.request_hash !== hash) throw new TransactionalError("Idempotency-Key ya se usó con otro contenido", 409, "idempotency_conflict");
+    if (existing.status === "queued") {
+      await getTransactionalQueue().add(
+        "send",
+        { messageId: existing.id },
+        { jobId: `transactional-${existing.id}-reconcile-${randomUUID()}` },
+      );
+    }
     return { message: existing, duplicate: true };
   }
 
@@ -287,6 +299,13 @@ export async function acceptTransactionalMessage(input: TransactionalSendInput, 
     if ((error as { code?: string }).code !== "23505") throw error;
     const [concurrent] = await sql<MessageRow[]>`SELECT * FROM outbound_messages WHERE idempotency_scope=${scope} AND idempotency_key=${idempotencyKey}`;
     if (!concurrent || concurrent.request_hash !== hash) throw new TransactionalError("Idempotency-Key ya se usó con otro contenido", 409, "idempotency_conflict");
+    if (concurrent.status === "queued") {
+      await getTransactionalQueue().add(
+        "send",
+        { messageId: concurrent.id },
+        { jobId: `transactional-${concurrent.id}-reconcile-${randomUUID()}` },
+      );
+    }
     return { message: concurrent, duplicate: true };
   }
 
@@ -305,7 +324,11 @@ export async function retryTransactionalMessage(sourceId:string,idempotencyKey:s
   const scope=`transactional-retry:${principal.kind}:${principal.id}`;
   const hash=createHash("sha256").update(sourceId).digest("hex");
   const[existing]=await sql<MessageRow[]>`SELECT * FROM outbound_messages WHERE idempotency_scope=${scope} AND idempotency_key=${idempotencyKey}`;
-  if(existing){if(existing.request_hash!==hash)throw new TransactionalError("Idempotency-Key ya se usó para otro reintento",409,"idempotency_conflict");return{message:existing,duplicate:true};}
+  if(existing){
+    if(existing.request_hash!==hash)throw new TransactionalError("Idempotency-Key ya se usó para otro reintento",409,"idempotency_conflict");
+    if(existing.status==="queued")await getTransactionalQueue().add("send",{messageId:existing.id},{jobId:`transactional-${existing.id}-reconcile-${randomUUID()}`});
+    return{message:existing,duplicate:true};
+  }
   const[source]=await sql<MessageRow[]>`SELECT * FROM outbound_messages WHERE id=${sourceId} AND kind='transactional'`;
   if(!source)throw new TransactionalError("Mensaje no encontrado",404,"not_found");
   const config=await settings();
@@ -359,6 +382,7 @@ export async function retryTransactionalMessage(sourceId:string,idempotencyKey:s
     if((error as{code?:string}).code!=="23505")throw error;
     const[concurrent]=await sql<MessageRow[]>`SELECT * FROM outbound_messages WHERE idempotency_scope=${scope} AND idempotency_key=${idempotencyKey}`;
     if(!concurrent||concurrent.request_hash!==hash)throw new TransactionalError("Idempotency-Key ya se usó para otro reintento",409,"idempotency_conflict");
+    if(concurrent.status==="queued")await getTransactionalQueue().add("send",{messageId:concurrent.id},{jobId:`transactional-${concurrent.id}-reconcile-${randomUUID()}`});
     return{message:concurrent,duplicate:true};
   }
   await getTransactionalQueue().add("send",{messageId},{jobId:`transactional-${messageId}`});
@@ -372,7 +396,7 @@ export async function sendTransactionalMessage(messageId: string) {
     FROM outbound_messages m CROSS JOIN settings s
     WHERE m.id=${messageId} AND m.kind='transactional'
   `;
-  if (!message || !["queued", "processing"].includes(message.status) || message.ses_message_id) return { skipped: true };
+  if (!message || message.status !== "queued" || message.ses_message_id) return { skipped: true };
   if(message.global_sending_paused)return{skipped:true,paused:true};
   const [suppression] = await sql<{ reason: string }[]>`
     SELECT reason FROM suppressions WHERE lower(email)=lower(${message.to_email}) AND scope IN ('transactional','all') AND status='active' LIMIT 1
@@ -408,7 +432,7 @@ export async function sendTransactionalMessage(messageId: string) {
   if(message.mime_byte_size!==null&&Number(message.mime_byte_size)!==mimeByteSize)throw new Error("El MIME persistido no coincide con el tamaño registrado");
   const [claimed] = await sql<{ id: string;attempt_count:number }[]>`
     UPDATE outbound_messages SET status='processing', attempt_count=attempt_count+1, processed_at=COALESCE(processed_at,now()), updated_at=now()
-    WHERE id=${messageId} AND status IN ('queued','processing') AND ses_message_id IS NULL RETURNING id,attempt_count
+    WHERE id=${messageId} AND status='queued' AND ses_message_id IS NULL RETURNING id,attempt_count
   `;
   if (!claimed) return { skipped: true };
   await sql`
@@ -417,7 +441,10 @@ export async function sendTransactionalMessage(messageId: string) {
     ON CONFLICT (event_key) DO NOTHING
   `;
 
-  const selectedTransport = env.mailTransport || message.configured_transport;
+  const selectedTransport: "smtp" | "ses" =
+    env.mailTransport === "smtp" || env.mailTransport === "ses"
+      ? env.mailTransport
+      : message.configured_transport;
   const[attempt]=await sql<{id:string}[]>`INSERT INTO message_send_attempts(message_id,attempt_number,kind,transport)VALUES(${messageId},${claimed.attempt_count},${message.retry_of_message_id?"manual_retry":"automatic"},${selectedTransport})RETURNING id`;
   await sql`INSERT INTO email_events(event_key,message_id,type,source,payload)VALUES(${eventKey({messageId,type:"send_attempted",attempt:claimed.attempt_count})},${messageId},'send_attempted','worker',${sql.json({attempt:claimed.attempt_count,transport:selectedTransport,attachments:attachments.length,mime_byte_size:mimeByteSize})})ON CONFLICT(event_key)DO NOTHING`;
   let providerMessageId = "";
@@ -438,35 +465,53 @@ export async function sendTransactionalMessage(messageId: string) {
       });
       providerMessageId = response.messageId;
     }
-  }catch(error){await sql`UPDATE message_send_attempts SET status='failed',error_code='transport_error',error_message=${String(error).slice(0,500)},finished_at=now() WHERE id=${attempt.id}`;throw error;}
+  }catch(error){
+    const detail=error instanceof Error?error.message:String(error);
+    await sql`UPDATE message_send_attempts SET status='failed',error_code='transport_error',error_message=${detail.slice(0,500)},finished_at=now() WHERE id=${attempt.id}`;
+    throw new TransactionalError(detail,502,"transport_error");
+  }
 
   const delivered = selectedTransport === "smtp";
-  await sql.begin(async (tx) => {
-    await tx`
-      UPDATE outbound_messages SET status=${delivered ? "delivered" : "sent"}, ses_message_id=${providerMessageId},
-        sent_at=now(), delivered_at=${delivered ? new Date() : null}, failure_code=NULL, failure_reason=NULL, updated_at=now()
-      WHERE id=${messageId}
-    `;
-    await tx`UPDATE message_send_attempts SET status='succeeded',provider_message_id=${providerMessageId},finished_at=now() WHERE id=${attempt.id}`;
-    await tx`
-      INSERT INTO email_events (event_key, message_id, type, ses_message_id, source, payload)
-      VALUES (${eventKey({ messageId, type: "sent", providerMessageId })}, ${messageId}, 'sent', ${providerMessageId}, ${selectedTransport}, ${tx.json({ transport: selectedTransport })})
-      ON CONFLICT (event_key) DO NOTHING
-    `;
-    if (delivered) await tx`
-      INSERT INTO email_events (event_key, message_id, type, ses_message_id, source, payload)
-      VALUES (${eventKey({ messageId, type: "delivered", providerMessageId })}, ${messageId}, 'delivered', ${providerMessageId}, 'smtp', '{"local":true}')
-      ON CONFLICT (event_key) DO NOTHING
-    `;
-  });
+  const acceptedStatus = transportAcceptedStatus(selectedTransport);
+  const acceptedEventType = transportAcceptanceEventType(selectedTransport);
+  try {
+    await sql.begin(async (tx) => {
+      await tx`
+        UPDATE outbound_messages SET status=${acceptedStatus}, ses_message_id=${providerMessageId},
+          sent_at=now(), delivered_at=${delivered ? new Date() : null}, failure_code=NULL, failure_reason=NULL, updated_at=now()
+        WHERE id=${messageId}
+      `;
+      await tx`UPDATE message_send_attempts SET status='succeeded',provider_message_id=${providerMessageId},finished_at=now() WHERE id=${attempt.id}`;
+      await tx`
+        INSERT INTO email_events (event_key, message_id, type, ses_message_id, source, payload)
+        VALUES (${eventKey({ messageId, type: acceptedEventType, providerMessageId })}, ${messageId}, ${acceptedEventType}, ${providerMessageId}, ${selectedTransport}, ${tx.json({ transport: selectedTransport })})
+        ON CONFLICT (event_key) DO NOTHING
+      `;
+      if (delivered) await tx`
+        INSERT INTO email_events (event_key, message_id, type, ses_message_id, source, payload)
+        VALUES (${eventKey({ messageId, type: "delivered", providerMessageId })}, ${messageId}, 'delivered', ${providerMessageId}, 'smtp', '{"local":true}')
+        ON CONFLICT (event_key) DO NOTHING
+      `;
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new TransactionalError(
+      `El proveedor aceptó el mensaje ${providerMessageId || "sin identificador"}, pero falta reconciliar el estado local: ${detail}`,
+      503,
+      "provider_acceptance_unconfirmed",
+    );
+  }
   return { messageId: providerMessageId };
 }
 
 export async function markTransactionalFailed(messageId: string, error: Error) {
+  const failureCode = error instanceof TransactionalError ? error.code : "worker_error";
   const [message] = await sql<{ status: string }[]>`
-    UPDATE outbound_messages SET status='failed', failure_code='worker_error', failure_reason=${error.message.slice(0, 500)}, updated_at=now()
-    WHERE id=${messageId} AND status NOT IN ('sent','delivered') RETURNING status
+    UPDATE outbound_messages SET status='failed', failure_code=${failureCode}, failure_reason=${error.message.slice(0, 500)}, updated_at=now()
+    WHERE id=${messageId} AND kind='transactional' AND status IN ('accepted','queued','processing') AND ses_message_id IS NULL
+    RETURNING status
   `;
+  await sql`UPDATE message_send_attempts SET status='failed',error_code=COALESCE(error_code,${failureCode}),error_message=COALESCE(error_message,${error.message.slice(0,500)}),finished_at=COALESCE(finished_at,now()) WHERE message_id=${messageId} AND status='started'`;
   if (message) await sql`
     INSERT INTO email_events (event_key, message_id, type, source, payload)
     VALUES (${eventKey({ messageId, type: "failed" })}, ${messageId}, 'failed', 'worker', ${sql.json({ error: error.message.slice(0, 500) })})
@@ -474,13 +519,44 @@ export async function markTransactionalFailed(messageId: string, error: Error) {
   `;
 }
 
-export async function recoverQueuedTransactionalMessages() {
+export async function releaseTransactionalForRetry(messageId:string,error:Error){
+  const failureCode=error instanceof TransactionalError?error.code:"worker_error";
+  if(!shouldRequeueTransactionalFailure(failureCode)){
+    await sql`UPDATE outbound_messages SET failure_code=${failureCode},failure_reason=${error.message.slice(0,500)},updated_at=now() WHERE id=${messageId} AND kind='transactional' AND status='processing'`;
+    return false;
+  }
+  const[message]=await sql<{attempt_count:number}[]>`UPDATE outbound_messages SET status='queued',failure_code=${failureCode},failure_reason=${error.message.slice(0,500)},updated_at=now() WHERE id=${messageId} AND kind='transactional' AND status='processing' AND ses_message_id IS NULL RETURNING attempt_count`;
+  if(!message)return false;
+  await sql`UPDATE message_send_attempts SET status='failed',error_code=COALESCE(error_code,${failureCode}),error_message=COALESCE(error_message,${error.message.slice(0,500)}),finished_at=COALESCE(finished_at,now()) WHERE message_id=${messageId} AND attempt_number=${message.attempt_count} AND status='started'`;
+  await sql`INSERT INTO email_events(event_key,message_id,type,source,payload)VALUES(${eventKey({messageId,type:"retry_queued",attempt:message.attempt_count})},${messageId},'retry_queued','worker',${sql.json({attempt:message.attempt_count,error:error.message.slice(0,500)})})ON CONFLICT(event_key)DO NOTHING`;
+  return true;
+}
+
+export async function recoverQueuedTransactionalMessages(options:{includeFresh?:boolean}={}) {
+  const[configuration]=await sql<{global_sending_paused:boolean}[]>`SELECT global_sending_paused FROM settings WHERE id=1`;
+  if(configuration?.global_sending_paused)return{recovered:0,paused:true};
+  const queuedBefore=options.includeFresh?new Date():new Date(Date.now()-60_000);
   const messages = await sql<{ id: string }[]>`
-    SELECT id FROM outbound_messages
-    WHERE kind='transactional' AND (
-      status='queued' OR (status='processing' AND ses_message_id IS NULL AND updated_at < now() - interval '5 minutes')
-    ) ORDER BY created_at LIMIT 10000
+    WITH candidates AS (
+      SELECT id,status FROM outbound_messages
+      WHERE kind='transactional' AND ses_message_id IS NULL AND (
+        (status='queued' AND updated_at<=${queuedBefore}) OR
+        (status='processing' AND updated_at<now()-interval '5 minutes')
+      )
+      ORDER BY created_at LIMIT 10000 FOR UPDATE SKIP LOCKED
+    ), closed_attempts AS (
+      UPDATE message_send_attempts attempt SET status='failed',error_code='worker_interrupted',
+        error_message='El worker se interrumpió antes de confirmar el resultado',finished_at=COALESCE(finished_at,now())
+      FROM candidates
+      WHERE attempt.message_id=candidates.id AND candidates.status='processing' AND attempt.status='started'
+      RETURNING attempt.id
+    )
+    UPDATE outbound_messages message SET status='queued',updated_at=now(),
+      failure_code=CASE WHEN message.status='processing' THEN 'worker_interrupted' ELSE message.failure_code END,
+      failure_reason=CASE WHEN message.status='processing' THEN 'Recuperado después de una interrupción del worker' ELSE message.failure_reason END
+    FROM candidates WHERE message.id=candidates.id RETURNING message.id
   `;
   const runId=randomUUID();
-  await getTransactionalQueue().addBulk(messages.map(({ id }) => ({ name: "send", data: { messageId: id }, opts: { jobId: `transactional-${id}-recover-${runId}` } })));
+  if(messages.length)await getTransactionalQueue().addBulk(messages.map(({ id }) => ({ name: "send", data: { messageId: id }, opts: { jobId: `transactional-${id}-recover-${runId}` } })));
+  return{recovered:messages.length,paused:false};
 }

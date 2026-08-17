@@ -91,6 +91,7 @@ try {
   assert(delivered.has_mime === true && Number(delivered.mime_byte_size) > pdf.byteLength, "No se persistió el MIME codificado con su tamaño exacto");
   assert(delivered.attachments.length === 1 && delivered.attachments[0].filename === "factura-e2e.pdf", "El adjunto no aparece en el registro exacto");
   assert(delivered.attempts.some((item) => item.status === "succeeded"), "No existe un intento de transporte exitoso");
+  assert(delivered.events.filter((item) => item.type === "sent").length === 1, "El historial contiene más de un evento Enviado");
   const [storedMime] = await sql`
     SELECT m.mime_blob_id,m.mime_byte_size,b.byte_size,b.mime_type,
       (SELECT (payload->>'mime_byte_size')::bigint FROM email_events WHERE message_id=m.id AND type='send_attempted' ORDER BY occurred_at DESC LIMIT 1) AS attempted_size
@@ -143,6 +144,7 @@ try {
   assert(retried.has_mime === true && Number(retried.mime_byte_size) > pdf.byteLength, "El reintento no regeneró su propio MIME inmutable");
   assert(retried.attachments.length === 1, "El reintento no conserva el adjunto inmutable");
   assert(retried.attempts.some((item) => item.kind === "manual_retry" && item.status === "succeeded"), "El intento manual no quedó trazado");
+  assert(retried.events.filter((item) => item.type === "sent").length === 1, "El historial del reintento duplica el evento Enviado");
 
   console.log(JSON.stringify({
     ok: true,
