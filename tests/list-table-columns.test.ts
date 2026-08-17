@@ -3,9 +3,11 @@ import test from "node:test";
 import {
   defaultSubscriberTableColumns,
   normalizeSubscriberTableColumns,
+  subscriberTableColumnIds,
 } from "../lib/list-table-columns";
 
 test("subscriber table columns default to every supported global field", () => {
+  assert.ok(subscriberTableColumnIds.includes("subscribed_at"));
   assert.deepEqual(
     normalizeSubscriberTableColumns(undefined),
     defaultSubscriberTableColumns,
