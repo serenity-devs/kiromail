@@ -2634,11 +2634,6 @@ const subscriberTableColumnOptions: {
     label: "País",
     description: "País guardado como dato global.",
   },
-  {
-    id: "subscribed_at",
-    label: "Fecha de Registro",
-    description: "Fecha automática en la que el contacto se registró en la lista.",
-  },
 ];
 
 const subscriberTableColumnLabels = Object.fromEntries(
@@ -2651,8 +2646,6 @@ function subscriberTableValue(
 ) {
   if (column === "city" || column === "country")
     return item.contact_fields?.[column];
-  if (column === "subscribed_at")
-    return item.subscribed_at ?? item.created_at;
   return item[column];
 }
 
@@ -2768,7 +2761,7 @@ function ListSubscriptionsView({
       (subscriberColumns.length +
         contactFieldKeys.length +
         activeFields.length +
-        3) *
+        4) *
         145,
   );
 
@@ -2860,6 +2853,7 @@ function ListSubscriptionsView({
                 <th>Suscripción</th>
                 <th>Estado global</th>
                 <th>Origen</th>
+                <th>Alta</th>
               </tr>
             </thead>
             <tbody>
@@ -2886,10 +2880,7 @@ function ListSubscriptionsView({
                   ))}
                   {subscriberColumns.map((column) => (
                     <td key={`${item.id}-${column}`}>
-                      {listCellValue(
-                        subscriberTableValue(item, column),
-                        column === "subscribed_at" ? "datetime" : undefined,
-                      )}
+                      {listCellValue(subscriberTableValue(item, column))}
                     </td>
                   ))}
                   {contactFieldKeys.map((key) => (
@@ -2911,6 +2902,7 @@ function ListSubscriptionsView({
                   <td>
                     <code className="list-source">{item.source}</code>
                   </td>
+                  <td>{date.format(new Date(item.subscribed_at ?? item.created_at))}</td>
                 </tr>
               ))}
             </tbody>
@@ -11235,7 +11227,7 @@ const segmentFieldOptions = [
   ["last_activity_at", "Última actividad"],
   ["subscription_status", "Estado en esta lista"],
   ["subscription_source", "Origen de la suscripción"],
-  ["subscribed_at", "Fecha de Registro"],
+  ["subscribed_at", "Fecha de alta en lista"],
   ["confirmed_at", "Fecha de confirmación"],
   ["unsubscribed_at", "Fecha de baja"],
   ["campaign_activity", "Actividad de campaña"],

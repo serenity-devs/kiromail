@@ -4,7 +4,6 @@ export const subscriberTableColumnIds = [
   "timezone",
   "city",
   "country",
-  "subscribed_at",
 ] as const;
 
 export type SubscriberTableColumn = (typeof subscriberTableColumnIds)[number];
