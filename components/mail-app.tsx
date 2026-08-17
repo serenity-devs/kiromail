@@ -132,6 +132,8 @@ type SegmentGroup = {
 type SegmentNode = SegmentRule | SegmentGroup;
 type Segment = {
   id: string;
+  etag?: string;
+  revision?: number;
   name: string;
   description: string;
   list_id?: string;
@@ -2141,6 +2143,16 @@ function AudiencesView({ data, refresh, notify }: ViewProps) {
     await refresh();
     notify(`Copia de “${label}” creada`);
   }
+  async function openSegmentEditor(segment: Segment) {
+    try {
+      const current = await api<Segment>(`/api/v1/segments/${segment.id}`);
+      setSelectedSegment(current);
+    } catch (err) {
+      notify(
+        err instanceof Error ? err.message : "No se pudo cargar el segmento",
+      );
+    }
+  }
   if (viewingList) {
     const currentList =
       data.lists.find((item) => item.id === viewingList.id) ?? viewingList;
@@ -2445,7 +2457,7 @@ function AudiencesView({ data, refresh, notify }: ViewProps) {
                   </button>
                   <button
                     className="icon-button bordered"
-                    onClick={() => setSelectedSegment(segment)}
+                    onClick={() => void openSegmentEditor(segment)}
                     aria-label={`Editar ${segment.name}`}
                   >
                     <Pencil size={14} />

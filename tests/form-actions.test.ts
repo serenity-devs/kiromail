@@ -59,3 +59,16 @@ test("segment date ranges explain that both dates are included", () => {
   assert.match(segmentEditor, /Fecha inicial incluida/);
   assert.match(segmentEditor, /Fecha final incluida/);
 });
+
+test("segment editing reads the current ETag before opening the form", () => {
+  const audiencesView = app.slice(
+    app.indexOf("function AudiencesView"),
+    app.indexOf("function listSubscriptionUrl"),
+  );
+  assert.match(audiencesView, /function openSegmentEditor/);
+  assert.match(
+    audiencesView,
+    /api<Segment>\(`\/api\/v1\/segments\/\$\{segment\.id\}`\)/,
+  );
+  assert.match(audiencesView, /void openSegmentEditor\(segment\)/);
+});
