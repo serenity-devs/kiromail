@@ -16,7 +16,7 @@ type EditableCampaign={id:string;name:string;list_id:string;subject:string;previ
 
 export async function GET(request:Request,context:{params:Promise<{id:string}>}){
   const principal=await authenticateApiRequest(request,"campaigns:read");if(!principal)return NextResponse.json({error:{code:"unauthorized",message:"No autorizado"}},{status:401});
-  const {id}=await context.params;const [campaign]=await sql`SELECT * FROM campaigns WHERE id=${id}`;if(!campaign)return NextResponse.json({error:{code:"not_found",message:"Campaña no encontrada"}},{status:404});
+  const {id}=await context.params;const [campaign]=await sql`SELECT c.*,t.name AS template_name,v.version_number AS template_version_number FROM campaigns c LEFT JOIN templates t ON t.id=c.template_id LEFT JOIN template_versions v ON v.id=c.template_version_id WHERE c.id=${id}`;if(!campaign)return NextResponse.json({error:{code:"not_found",message:"Campaña no encontrada"}},{status:404});
   const recipients=await sql`SELECT id,email,status,variant_id,experiment_phase,queued_at,sent_at,delivered_at,opened_at,clicked_at,open_count,click_count,failure_reason FROM campaign_recipients WHERE campaign_id=${id} ORDER BY created_at LIMIT 200`;
   const exclusions=await sql`SELECT reason,count(*)::int AS count FROM campaign_exclusions WHERE campaign_id=${id} GROUP BY reason ORDER BY reason`;
   const transitions=await sql`SELECT id,from_status,to_status,action,detail,created_at FROM campaign_transitions WHERE campaign_id=${id} ORDER BY created_at,id`;

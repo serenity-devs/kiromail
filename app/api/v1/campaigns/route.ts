@@ -27,12 +27,16 @@ export async function GET(request:Request){
   const principal=await authenticateApiRequest(request,"campaigns:read");if(!principal)return NextResponse.json({error:{code:"unauthorized",message:"No autorizado"}},{status:401});
   const url=new URL(request.url);const status=url.searchParams.get("status");const listId=url.searchParams.get("list_id");
   const rows=await sql`
-    SELECT c.id,c.name,c.list_id,l.name AS list_name,c.subject,c.preview_text,c.from_name,c.from_email,c.reply_to,c.content_source,c.template_version_id,
+    SELECT c.id,c.name,c.list_id,l.name AS list_name,c.subject,c.preview_text,c.from_name,c.from_email,c.reply_to,c.content_source,c.template_id,c.template_version_id,
+      t.name AS template_name,v.version_number AS template_version_number,
       c.target_type,c.target_id,c.exclusion_segment_ids,c.status,c.scheduled_at,c.started_at,c.completed_at,c.total_recipients,c.sent_count,c.delivered_count,
       c.version,c.approval_required,c.approved_at,c.approved_version,
       (SELECT json_build_object('id',e.id,'status',e.status,'winner_metric',e.winner_metric,'sample_percentage',e.sample_percentage,'winner_variant_id',e.winner_variant_id,'actual_sample_size',e.actual_sample_size,'remainder_size',e.remainder_size) FROM campaign_experiments e WHERE e.campaign_id=c.id) AS experiment,
       c.open_count,c.click_count,c.bounce_count,c.complaint_count,c.unsubscribe_count,c.created_at,c.updated_at
-    FROM campaigns c LEFT JOIN lists l ON l.id=c.list_id
+    FROM campaigns c
+    LEFT JOIN lists l ON l.id=c.list_id
+    LEFT JOIN templates t ON t.id=c.template_id
+    LEFT JOIN template_versions v ON v.id=c.template_version_id
     WHERE c.archived_at IS NULL AND (${status}::text IS NULL OR c.status=${status}) AND (${listId}::uuid IS NULL OR c.list_id=${listId}::uuid)
     ORDER BY c.created_at DESC LIMIT 200
   `;return NextResponse.json({data:rows.map(row=>({...row,etag:resourceEtag("campaign",row.id,row.version)}))});

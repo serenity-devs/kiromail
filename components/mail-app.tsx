@@ -229,6 +229,7 @@ type Campaign = {
   reply_to: string;
   template_id?: string;
   template_version_id?: string;
+  template_version_number?: number;
   content_source: "template" | "direct";
   html_content: string;
   text_content: string;
@@ -12033,9 +12034,25 @@ function CampaignModal({
     target_id: campaign?.target_id ?? "",
     scheduled_at: scheduledLocal,
   });
+  const selectedTemplate = marketingTemplates.find(
+    (item) => item.id === form.template_id,
+  );
+  const selectedPublishedVersion = selectedTemplate?.published_version_number;
+  const keepsPinnedTemplateVersion = Boolean(
+    campaign &&
+      !templateChanged &&
+      form.template_id === campaign.template_id,
+  );
+  const hasNewerTemplateVersion = Boolean(
+    keepsPinnedTemplateVersion &&
+      campaign?.template_version_id &&
+      selectedTemplate?.published_version_id &&
+      campaign.template_version_id !== selectedTemplate.published_version_id,
+  );
   const approvalSensitiveChanged = Boolean(
     campaign &&
-      (form.subject !== campaign.subject ||
+      (templateChanged ||
+        form.subject !== campaign.subject ||
         form.preview_text !== campaign.preview_text ||
         form.from_name !== campaign.from_name ||
         form.from_email !== campaign.from_email ||
@@ -12055,13 +12072,23 @@ function CampaignModal({
   }
   function selectTemplate(id: string) {
     const template = data.templates.find((item) => item.id === id);
-    setTemplateChanged(true);
+    const changesCampaignTemplate = !campaign || id !== campaign.template_id;
+    setTemplateChanged(changesCampaignTemplate);
     setForm((current) => ({
       ...current,
       template_id: id,
-      subject: template?.subject ?? current.subject,
-      preview_text: template?.preview_text ?? current.preview_text,
+      subject:
+        !changesCampaignTemplate && campaign
+          ? campaign.subject
+          : (template?.subject ?? current.subject),
+      preview_text:
+        !changesCampaignTemplate && campaign
+          ? campaign.preview_text
+          : (template?.preview_text ?? current.preview_text),
     }));
+  }
+  function updateTemplateVersion() {
+    setTemplateChanged(true);
   }
   const targetOptions = data.segments.filter(
     (item) => !item.list_id || item.list_id === form.list_id,
@@ -12281,7 +12308,10 @@ function CampaignModal({
                     />
                   </span>
                   <strong>{item.name}</strong>
-                  <small>{item.subject}</small>
+                  <small>
+                    Versión publicada v{item.published_version_number ?? "—"}
+                    {item.subject ? ` · ${item.subject}` : ""}
+                  </small>
                   {form.template_id === item.id && (
                     <i>
                       <Check size={14} />
@@ -12290,6 +12320,47 @@ function CampaignModal({
                 </button>
               ))}
             </div>
+            {form.template_id && selectedTemplate && (
+              <div className="campaign-template-version">
+                <div>
+                  {keepsPinnedTemplateVersion ? (
+                    <>
+                      <strong>
+                        Versión asociada: v
+                        {campaign?.template_version_number ?? "—"}
+                      </strong>
+                      <small>
+                        {hasNewerTemplateVersion
+                          ? `La versión publicada más reciente es la v${selectedPublishedVersion ?? "—"}.`
+                          : "Es la versión publicada más reciente."}
+                      </small>
+                    </>
+                  ) : (
+                    <>
+                      <strong>
+                        Se asociará la versión v
+                        {selectedPublishedVersion ?? "—"} al guardar
+                      </strong>
+                      <small>
+                        {campaign
+                          ? "El asunto y el remitente de la campaña se conservan."
+                          : "Esta versión quedará fijada en la nueva campaña."}
+                      </small>
+                    </>
+                  )}
+                </div>
+                {hasNewerTemplateVersion && (
+                  <button
+                    type="button"
+                    className="button button-secondary button-small"
+                    onClick={updateTemplateVersion}
+                  >
+                    <RefreshCw size={13} />
+                    Actualizar a v{selectedPublishedVersion ?? "—"}
+                  </button>
+                )}
+              </div>
+            )}
             {form.template_id && (
               <div className="test-send">
                 <label>

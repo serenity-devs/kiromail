@@ -63,7 +63,7 @@ export async function getBootstrapData() {
     WHERE t.status <> 'archived' ORDER BY t.updated_at DESC
   `;
   const campaigns = await sql`
-    SELECT c.*, t.name AS template_name,
+    SELECT c.*, t.name AS template_name, cv.version_number AS template_version_number,
       (SELECT json_build_object('id',e.id,'status',e.status,'winner_metric',e.winner_metric,'sample_percentage',e.sample_percentage,'winner_variant_id',e.winner_variant_id,'actual_sample_size',e.actual_sample_size,'remainder_size',e.remainder_size) FROM campaign_experiments e WHERE e.campaign_id=c.id) AS experiment,
       (SELECT json_build_object('action',ac.action,'comment',ac.comment,'campaign_version',ac.campaign_version,'created_at',ac.created_at,
         'actor_name',COALESCE(u.name,k.name,'Sistema')) FROM campaign_approval_comments ac
@@ -76,7 +76,9 @@ export async function getBootstrapData() {
         WHEN c.target_type = 'segment' THEN (SELECT name FROM segments WHERE id = c.target_id)
         ELSE 'Todos los suscritos'
       END AS target_name
-    FROM campaigns c LEFT JOIN templates t ON t.id = c.template_id
+    FROM campaigns c
+    LEFT JOIN templates t ON t.id = c.template_id
+    LEFT JOIN template_versions cv ON cv.id = c.template_version_id
     ORDER BY c.created_at DESC LIMIT 100
   `;
   const [settings] = await sql`SELECT * FROM settings WHERE id = 1`;
