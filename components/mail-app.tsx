@@ -4862,6 +4862,14 @@ function CampaignsView({
       setResendingId(null);
     }
   }
+  if (reporting)
+    return (
+      <CampaignReportView
+        campaign={reporting}
+        back={() => setReporting(null)}
+        backLabel="Volver a campañas"
+      />
+    );
   return (
     <>
       <PageIntro
@@ -5077,12 +5085,6 @@ function CampaignsView({
             await refresh();
             notify(message);
           }}
-        />
-      )}
-      {reporting && (
-        <CampaignReportModal
-          campaign={reporting}
-          close={() => setReporting(null)}
         />
       )}
     </>
@@ -5921,6 +5923,14 @@ function ReportsView({ data }: { data: AppData }) {
     };
   }, [tab, range, revision]);
   const exportUrl = `/api/v1/reports/${tab}?${range}&format=csv`;
+  if (selected)
+    return (
+      <CampaignReportView
+        campaign={selected}
+        back={() => setSelected(null)}
+        backLabel="Volver a informes"
+      />
+    );
   return (
     <>
       <PageIntro
@@ -6050,12 +6060,6 @@ function ReportsView({ data }: { data: AppData }) {
           </div>
         </article>
       </div>
-      {selected && (
-        <CampaignReportModal
-          campaign={selected}
-          close={() => setSelected(null)}
-        />
-      )}
     </>
   );
 }
@@ -6709,12 +6713,14 @@ function AdvancedAudienceReportPanel({ report }: { report: AudienceReport }) {
   );
 }
 
-function CampaignReportModal({
+function CampaignReportView({
   campaign,
-  close,
+  back,
+  backLabel,
 }: {
   campaign: Campaign;
-  close: () => void;
+  back: () => void;
+  backLabel: string;
 }) {
   const [report, setReport] = useState<CampaignAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -6754,41 +6760,44 @@ function CampaignReportModal({
       active = false;
     };
   }, [campaign.id, status, query, page, revision]);
+  const intro = (
+    <PageIntro
+      eyebrow="Informe de campaña"
+      title={report?.campaign.name ?? campaign.name}
+      text="Rendimiento, interacción e incidencias del envío en una vista completa."
+      actions={
+        <button className="button button-secondary" onClick={back}>
+          <ArrowLeft size={16} /> {backLabel}
+        </button>
+      }
+    />
+  );
   if (loading && !report)
     return (
-      <Modal
-        title="Informe de campaña"
-        eyebrow={campaign.name}
-        close={close}
-        wide
-      >
-        <LoadingState />
-      </Modal>
+      <>
+        {intro}
+        <section className="panel report-loading">
+          <RefreshCw className="spin" size={20} />
+          Calculando métricas desde los eventos brutos…
+        </section>
+      </>
     );
   if (error && !report)
     return (
-      <Modal
-        title="Informe de campaña"
-        eyebrow={campaign.name}
-        close={close}
-        wide
-      >
+      <>
+        {intro}
         <ErrorState
           message={error}
           retry={() => setRevision((value) => value + 1)}
         />
-      </Modal>
+      </>
     );
   if (!report) return null;
   const s = report.summary;
   return (
-    <Modal
-      title={report.campaign.name}
-      eyebrow="Informe de campaña"
-      close={close}
-      wide
-    >
-      <div className="campaign-report">
+    <>
+      {intro}
+      <div className="campaign-report campaign-report-inline">
         <div className="campaign-report-head">
           <div>
             <span className={`status-badge ${report.campaign.status}`}>
@@ -7201,12 +7210,12 @@ function CampaignReportModal({
           </>
         )}
       </div>
-      <footer className="modal-actions">
-        <button className="button button-secondary" onClick={close}>
-          Cerrar
+      <footer className="campaign-report-footer">
+        <button className="button button-secondary" onClick={back}>
+          <ArrowLeft size={16} /> {backLabel}
         </button>
       </footer>
-    </Modal>
+    </>
   );
 }
 
