@@ -238,8 +238,10 @@ type Campaign = {
   target_type: string;
   target_id: string | null;
   target_name: string;
+  exclusion_segment_ids?: string[];
   status: string;
   scheduled_at?: string;
+  started_at?: string;
   created_at: string;
   total_recipients: number;
   sent_count: number;
@@ -1596,7 +1598,7 @@ function Dashboard({
         </div>
         <div className="campaign-list">
           {recent.map((campaign) => (
-            <CampaignRow key={campaign.id} campaign={campaign} />
+            <CampaignRow key={campaign.id} campaign={campaign} data={data} />
           ))}
         </div>
       </section>
@@ -1656,11 +1658,14 @@ function FunnelBar({
 
 function CampaignRow({
   campaign,
+  data,
   actions,
 }: {
   campaign: Campaign;
+  data: Pick<AppData, "campaigns" | "lists" | "segments" | "tags">;
   actions?: React.ReactNode;
 }) {
+  const audience = campaignAudienceSummary(campaign, data);
   return (
     <div className="campaign-row">
       <span className={`campaign-icon status-${campaign.status}`}>
@@ -1674,7 +1679,22 @@ function CampaignRow({
         {statusLabel[campaign.status] ?? campaign.status}
       </span>
       <div className="campaign-audience">
-        <Users size={14} /> {campaign.target_name}
+        <strong title={audience.countTitle}>
+          <Users size={13} /> {audience.countLabel}
+        </strong>
+        <small title={audience.targetTitle}>
+          {campaign.target_type === "segment" ? (
+            <Layers3 size={11} />
+          ) : (
+            <ListFilter size={11} />
+          )}
+          {audience.targetLabel}
+        </small>
+        {audience.performanceLabel && (
+          <small title="Rendimiento sobre los mensajes entregados">
+            <Activity size={11} /> {audience.performanceLabel}
+          </small>
+        )}
       </div>
       <div className="campaign-date">
         {campaign.scheduled_at
@@ -1684,6 +1704,85 @@ function CampaignRow({
       {actions}
     </div>
   );
+}
+
+function campaignAudienceSummary(
+  campaign: Campaign,
+  data: Pick<AppData, "campaigns" | "lists" | "segments" | "tags">,
+) {
+  const list = data.lists.find((item) => item.id === campaign.list_id);
+  const segment = data.segments.find((item) => item.id === campaign.target_id);
+  const tag = data.tags.find((item) => item.id === campaign.target_id);
+  const sourceCampaign = data.campaigns.find(
+    (item) => item.id === campaign.target_id,
+  );
+  const hasFixedAudience =
+    campaign.total_recipients > 0 || Boolean(campaign.started_at);
+  const currentCount =
+    campaign.target_type === "segment"
+      ? segment?.contact_count
+      : campaign.target_type === "tag"
+        ? tag?.contact_count
+        : campaign.target_type === "non_openers"
+          ? sourceCampaign
+            ? Math.max(0, sourceCampaign.sent_count - sourceCampaign.open_count)
+            : undefined
+          : list?.contact_count;
+  const count = hasFixedAudience ? campaign.total_recipients : currentCount;
+  const countLabel =
+    count === undefined
+      ? "Audiencia por calcular"
+      : `${hasFixedAudience ? "" : "≈ "}${number.format(count)} ${
+          hasFixedAudience
+            ? count === 1
+              ? "destinatario"
+              : "destinatarios"
+            : count === 1
+              ? "suscriptor ahora"
+              : "suscriptores ahora"
+        }`;
+  const targetName =
+    campaign.target_type === "segment"
+      ? (segment?.name ?? campaign.target_name)
+      : campaign.target_type === "tag"
+        ? (tag?.name ?? campaign.target_name)
+        : campaign.target_type === "non_openers"
+          ? (sourceCampaign?.name ?? campaign.target_name)
+          : (list?.name ?? campaign.target_name);
+  const targetKind =
+    campaign.target_type === "segment"
+      ? "Segmento"
+      : campaign.target_type === "tag"
+        ? "Etiqueta"
+        : campaign.target_type === "non_openers"
+          ? "No abiertos"
+          : "Lista";
+  const exclusionCount = campaign.exclusion_segment_ids?.length ?? 0;
+  const exclusionLabel = exclusionCount
+    ? ` · ${exclusionCount} ${exclusionCount === 1 ? "exclusión" : "exclusiones"}`
+    : "";
+  const delivered = campaign.delivered_count;
+  const openRate = delivered
+    ? Math.round((campaign.open_count / delivered) * 1000) / 10
+    : 0;
+  const clickRate = delivered
+    ? Math.round((campaign.click_count / delivered) * 1000) / 10
+    : 0;
+  return {
+    countLabel,
+    countTitle: hasFixedAudience
+      ? "Audiencia fijada al iniciar el envío"
+      : "Estimación actual; se volverá a calcular antes del envío",
+    targetLabel: `${targetKind} · ${targetName}${exclusionLabel}`,
+    targetTitle: `${targetKind}: ${targetName}${
+      exclusionCount
+        ? `. ${exclusionCount} ${exclusionCount === 1 ? "segmento excluido" : "segmentos excluidos"}`
+        : ""
+    }`,
+    performanceLabel: delivered
+      ? `${openRate}% aperturas · ${clickRate}% clics`
+      : null,
+  };
 }
 
 function ContactsView({ data, refresh, notify }: ViewProps) {
@@ -4921,6 +5020,7 @@ function CampaignsView({
               <CampaignRow
                 key={campaign.id}
                 campaign={campaign}
+                data={data}
                 actions={
                   canEdit || campaign.experiment || hasReport ? (
                     <div className="row-actions">
@@ -6938,15 +7038,13 @@ function CampaignReportView({
                 </span>
               </div>
             </section>
-            <TrendChart
+            <CampaignTrendChart
               rows={report.timeline.map((row) => ({
                 date: row.bucket,
-                primary: row.delivered,
-                secondary: row.unique_clicks,
+                deliveries: row.delivered,
+                clicks: row.unique_clicks,
               }))}
-              primary="Entregas"
-              secondary="Clics únicos"
-              compact
+              granularity={report.granularity}
             />
             <div className="report-two-columns">
               <section className="panel report-ranked">
@@ -7216,6 +7314,181 @@ function CampaignReportView({
         </button>
       </footer>
     </>
+  );
+}
+
+type CampaignTrendMetric = "deliveries" | "clicks";
+
+function campaignChartScale(values: number[]) {
+  const largest = Math.max(0, ...values.map(Number));
+  if (!largest) return { max: 1, ticks: [1, 0] };
+  const roughStep = largest / 4;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const normalized = roughStep / magnitude;
+  const niceStep =
+    (normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10) *
+    magnitude;
+  const step = Math.max(1, niceStep);
+  const max = Math.ceil(largest / step) * step;
+  const ticks = Array.from(
+    { length: Math.round(max / step) + 1 },
+    (_, index) => max - index * step,
+  );
+  return { max, ticks };
+}
+
+function campaignTimelineTick(value: string, granularity: string) {
+  const point = new Date(value);
+  return granularity === "day"
+    ? new Intl.DateTimeFormat("es-ES", {
+        day: "numeric",
+        month: "short",
+      }).format(point)
+    : new Intl.DateTimeFormat("es-ES", {
+        day: "numeric",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      }).format(point);
+}
+
+function CampaignTrendChart({
+  rows,
+  granularity,
+}: {
+  rows: { date: string; deliveries: number; clicks: number }[];
+  granularity: string;
+}) {
+  const [metric, setMetric] = useState<CampaignTrendMetric>("deliveries");
+  const config =
+    metric === "deliveries"
+      ? {
+          label: "Entregas",
+          axisLabel: "Entregas",
+          tone: "deliveries",
+          values: rows.map((row) => Number(row.deliveries)),
+        }
+      : {
+          label: "Clics únicos",
+          axisLabel: "Clics únicos",
+          tone: "clicks",
+          values: rows.map((row) => Number(row.clicks)),
+        };
+  const scale = campaignChartScale(config.values);
+  const labelCount = Math.min(5, rows.length);
+  const xTickIndexes = new Set(
+    Array.from({ length: labelCount }, (_, index) =>
+      labelCount === 1
+        ? 0
+        : Math.round((index * (rows.length - 1)) / (labelCount - 1)),
+    ),
+  );
+  const intervalLabel =
+    granularity === "minute"
+      ? "minutos"
+      : granularity === "hour"
+        ? "horas"
+        : "días";
+  return (
+    <section className="panel report-chart compact campaign-trend-chart">
+      <div className="panel-head">
+        <div>
+          <p className="eyebrow">Evolución</p>
+          <h3>Actividad en el tiempo</h3>
+        </div>
+        <div
+          className="chart-metric-tabs"
+          role="tablist"
+          aria-label="Métrica de actividad"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={metric === "deliveries"}
+            className={metric === "deliveries" ? "active" : ""}
+            onClick={() => setMetric("deliveries")}
+          >
+            <MailCheck size={13} /> Entregas
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={metric === "clicks"}
+            className={metric === "clicks" ? "active" : ""}
+            onClick={() => setMetric("clicks")}
+          >
+            <MousePointerClick size={13} /> Clics
+          </button>
+        </div>
+      </div>
+      {rows.length ? (
+        <div
+          className={`campaign-timeline-chart ${config.tone}`}
+          role="tabpanel"
+          aria-label={`Gráfica de ${config.label.toLowerCase()}`}
+        >
+          <span className="campaign-chart-y-title">{config.axisLabel}</span>
+          <div className="campaign-chart-y-axis" aria-hidden="true">
+            {scale.ticks.map((tick) => (
+              <span
+                key={tick}
+                style={{ top: `${(1 - tick / scale.max) * 100}%` }}
+              >
+                {number.format(tick)}
+              </span>
+            ))}
+          </div>
+          <div className="campaign-chart-plot">
+            <div className="campaign-chart-grid" aria-hidden="true">
+              {scale.ticks.map((tick) => (
+                <i
+                  key={tick}
+                  style={{ top: `${(1 - tick / scale.max) * 100}%` }}
+                />
+              ))}
+            </div>
+            <div className="campaign-chart-bars">
+              {rows.map((row, index) => {
+                const value = config.values[index] ?? 0;
+                return (
+                  <span
+                    key={`${row.date}-${metric}`}
+                    title={`${new Date(row.date).toLocaleString("es-ES")}: ${config.label} ${number.format(value)}`}
+                  >
+                    <i
+                      style={{
+                        height: value
+                          ? `${Math.max(2, (value / scale.max) * 100)}%`
+                          : 0,
+                      }}
+                    />
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+          <div
+            className="campaign-chart-x-axis"
+            style={{
+              gridTemplateColumns: `repeat(${rows.length}, minmax(0, 1fr))`,
+            }}
+          >
+            {rows.map((row, index) => (
+              <span key={row.date}>
+                {xTickIndexes.has(index)
+                  ? campaignTimelineTick(row.date, granularity)
+                  : ""}
+              </span>
+            ))}
+          </div>
+          <span className="campaign-chart-x-title">
+            Tiempo · intervalos por {intervalLabel}
+          </span>
+        </div>
+      ) : (
+        <p className="muted">No hay actividad en este periodo.</p>
+      )}
+    </section>
   );
 }
 

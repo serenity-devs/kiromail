@@ -47,13 +47,14 @@ export async function getBootstrapData() {
     SELECT * FROM segments WHERE status='active' ORDER BY created_at ASC
   `;
   const segments = await Promise.all(segmentRows.map(async (segment) => {
-    const definition=segment.definition?.children?.length?segment.definition:segment.rules;const filter = buildSegmentFilter(definition, segment.match_type);
+    const definition=segment.definition?.children?.length?segment.definition:segment.rules;const filter = buildSegmentFilter(definition, segment.match_type,segment.list_id?2:1);
     const [count] = await sql.unsafe<{ count: number }[]>(`
       SELECT count(*)::int AS count FROM contacts c
       WHERE c.status = 'active'
+        ${segment.list_id?"AND EXISTS(SELECT 1 FROM subscriptions base WHERE base.contact_id=c.id AND base.list_id::text=$1::text AND base.status='active')":""}
         AND NOT EXISTS (SELECT 1 FROM suppressions x WHERE lower(x.email)=lower(c.email) AND x.scope IN ('marketing','all') AND x.status='active')
         AND ${filter.where}
-    `, filter.values);
+    `, segment.list_id?[segment.list_id,...filter.values]:filter.values);
     await sql.begin(async tx=>{await tx`UPDATE segments SET last_count=${count.count},last_count_at=now() WHERE id=${segment.id}`;await tx`INSERT INTO segment_count_history(segment_id,captured_on,contact_count)VALUES(${segment.id},CURRENT_DATE,${count.count})ON CONFLICT(segment_id,captured_on)DO UPDATE SET contact_count=EXCLUDED.contact_count,created_at=now()`;});
     return { ...segment, definition, contact_count: count.count };
   }));
@@ -71,9 +72,9 @@ export async function getBootstrapData() {
         WHERE ac.campaign_id=c.id ORDER BY ac.created_at DESC,ac.id DESC LIMIT 1) AS latest_approval_comment,
       CASE
         WHEN c.target_type = 'non_openers' THEN 'No abiertos · ' || COALESCE((SELECT name FROM campaigns source WHERE source.id = c.target_id),'campaña original')
-        WHEN c.list_id IS NOT NULL THEN (SELECT name FROM lists WHERE id = c.list_id)
         WHEN c.target_type = 'tag' THEN (SELECT name FROM tags WHERE id = c.target_id)
         WHEN c.target_type = 'segment' THEN (SELECT name FROM segments WHERE id = c.target_id)
+        WHEN c.list_id IS NOT NULL THEN (SELECT name FROM lists WHERE id = c.list_id)
         ELSE 'Todos los suscritos'
       END AS target_name
     FROM campaigns c
