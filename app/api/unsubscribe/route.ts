@@ -4,6 +4,7 @@ import { sql } from "@/lib/db";
 import { recomputeCampaignStats } from "@/lib/campaign-service";
 import { eventKey } from "@/lib/email";
 import { requestIp, unsubscribeWithPublicToken } from "@/lib/public-preferences";
+import { publicAppUrl } from "@/lib/config";
 
 async function unsubscribe(token: string) {
   const data = readUnsubscribeToken(token);
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
     const modern=await unsubscribeWithPublicToken(token,requestIp(request),request.headers.get("user-agent")??"");
     if(modern?.campaignId)await recomputeCampaignStats(modern.campaignId);
     if(!modern)await unsubscribe(token);
-    if ((request.headers.get("accept") ?? "").includes("text/html")) return NextResponse.redirect(new URL("/unsubscribe/done", request.url), 303);
+    if ((request.headers.get("accept") ?? "").includes("text/html")) return NextResponse.redirect(publicAppUrl("/unsubscribe/done"), 303);
     return NextResponse.json({ unsubscribed: true });
   } catch {
     return NextResponse.json({ error: "Enlace de baja no válido" }, { status: 400 });

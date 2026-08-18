@@ -54,6 +54,10 @@ export const env = {
   metricsToken: secret("METRICS_TOKEN"),
 };
 
+export function publicAppUrl(pathname: string) {
+  return new URL(pathname, env.appUrl);
+}
+
 export function productionConfigurationChecks() {
   const production = env.appUrl.startsWith("https://");
   const checks = [
